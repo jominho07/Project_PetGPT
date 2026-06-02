@@ -13,7 +13,7 @@ st.write("간단한 설문을 통해 운명의 반려동물을 추천해 드립�
 st.divider()
 
 # =========================
-# CSV 데이터 로드
+# CSV 로드
 # =========================
 
 DATA_PATH = os.path.join(
@@ -24,7 +24,6 @@ DATA_PATH = os.path.join(
 
 df = pd.read_csv(DATA_PATH)
 
-# boolean 변환
 df["allergy_friendly"] = (
     df["allergy_friendly"]
     .astype(str)
@@ -51,30 +50,27 @@ with col1:
 
 with col2:
     activity_level = st.select_slider(
-        "본인의 하루 활동량 (산책 가능 수준)",
+        "활동량",
         options=["매우 적음", "보통", "활동적", "매우 활동적"]
     )
 
-    has_allergy = st.checkbox("가족 중 털 알러지가 있는 분이 있나요?")
+    has_allergy = st.checkbox("털 알러지가 있나요?")
 
 # =========================
-# 점수 계산 함수
+# 점수 함수
 # =========================
 
 def score(row):
     s = 0
 
-    # 동물 타입
     if pet_type == "상관없음":
         s += 3
     elif row["type"] == pet_type:
         s += 3
 
-    # 활동량 매칭
     if row["energy"] == activity_level:
         s += 3
 
-    # 주거 환경
     if living_env == "아파트/빌라":
         if row["size"] == "소형":
             s += 2
@@ -87,7 +83,6 @@ def score(row):
         if row["size"] in ["중형", "대형"]:
             s += 2
 
-    # 알러지
     if has_allergy:
         if row["allergy_friendly"]:
             s += 3
@@ -103,30 +98,71 @@ def score(row):
 if st.button("추천 리스트 보기", type="primary"):
 
     result = df.copy()
-
     result["score"] = result.apply(score, axis=1)
 
-    result = result.sort_values("score", ascending=False)
+    # =========================
+    # 상관없음 → 강아지 + 고양이 각각 TOP3
+    # =========================
 
-    top3 = result.head(3)
+    if pet_type == "상관없음":
 
-    st.success("당신에게 가장 잘 맞는 반려동물 TOP 3")
+        dogs = result[result["type"] == "강아지"] \
+            .sort_values("score", ascending=False) \
+            .head(3)
 
-    cols = st.columns(len(top3))
+        cats = result[result["type"] == "고양이"] \
+            .sort_values("score", ascending=False) \
+            .head(3)
 
-    for col, (_, row) in zip(cols, top3.iterrows()):
+        st.success("🐶 강아지 TOP 3")
+        dog_cols = st.columns(len(dogs))
 
-        with col:
-            with st.container(border=True):
+        for col, (_, row) in zip(dog_cols, dogs.iterrows()):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### 🐶 {row['breed']}")
+                    st.write(f"{row['size']} · {row['energy']}")
+                    st.write(f"수명: {row['life_span']}")
+                    if row["allergy_friendly"]:
+                        st.success("알러지 친화")
 
-                st.markdown(f"### 🐾 {row['breed']}")
+        st.divider()
 
-                st.write(f"**{row['type']} · {row['size']}**")
-                st.write(f"활동량: {row['energy']}")
-                st.write(f"평균 수명: {row['life_span']}")
+        st.success("🐱 고양이 TOP 3")
+        cat_cols = st.columns(len(cats))
 
-                if row["allergy_friendly"]:
-                    st.success("알러지 친화 품종")
+        for col, (_, row) in zip(cat_cols, cats.iterrows()):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### 🐱 {row['breed']}")
+                    st.write(f"{row['size']} · {row['energy']}")
+                    st.write(f"수명: {row['life_span']}")
+                    if row["allergy_friendly"]:
+                        st.success("알러지 친화")
 
-                st.progress(min(row["score"] / 10, 1.0))
-                st.caption(f"적합도 점수: {row['score']}점")
+    # =========================
+    # 강아지 or 고양이 선택 시 → 기존 TOP3
+    # =========================
+
+    else:
+
+        filtered = result[result["type"] == pet_type] \
+            .sort_values("score", ascending=False) \
+            .head(3)
+
+        st.success(f"{pet_type} TOP 3")
+
+        cols = st.columns(len(filtered))
+
+        for col, (_, row) in zip(cols, filtered.iterrows()):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### 🐾 {row['breed']}")
+                    st.write(f"{row['size']} · {row['energy']}")
+                    st.write(f"수명: {row['life_span']}")
+
+                    if row["allergy_friendly"]:
+                        st.success("알러지 친화")
+
+                    st.progress(min(row["score"] / 10, 1.0))
+                    st.caption(f"점수: {row['score']}")
