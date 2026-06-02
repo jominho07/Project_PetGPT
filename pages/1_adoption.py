@@ -7,7 +7,10 @@ import auth
 
 auth.login_widget()
 
-st.title("🏠 반려동물 추천 시스템")
+st.title("🏠 나에게 꼭 맞는 가족 찾기")
+st.write("간단한 설문을 통해 운명의 반려동물을 추천해 드립니다.")
+
+st.divider()
 
 # =========================
 # CSV 로드
@@ -21,40 +24,75 @@ DATA_PATH = os.path.join(
 
 df = pd.read_csv(DATA_PATH)
 
-df["allergy_friendly"] = df["allergy_friendly"].astype(str).str.lower().eq("true")
+df["allergy_friendly"] = (
+    df["allergy_friendly"]
+    .astype(str)
+    .str.lower()
+    .eq("true")
+)
 
 # =========================
 # 사용자 입력
 # =========================
 
-pet_type = st.selectbox("선호 동물", ["강아지", "고양이", "상관없음"])
-activity = st.select_slider(
-    "활동량",
-    ["매우 적음", "보통", "활동적", "매우 활동적"]
-)
-allergy = st.checkbox("알러지 있음")
+col1, col2 = st.columns(2)
+
+with col1:
+    pet_type = st.selectbox(
+        "선호하는 동물",
+        ["강아지", "고양이", "상관없음"]
+    )
+
+    living_env = st.radio(
+        "주거 환경",
+        ["아파트/빌라", "단독주택", "마당 있는 집"]
+    )
+
+with col2:
+    activity_level = st.select_slider(
+        "활동량",
+        options=["매우 적음", "보통", "활동적", "매우 활동적"]
+    )
+
+    has_allergy = st.checkbox("털 알러지가 있나요?")
 
 # =========================
-# 점수 함수 (단순 버전)
+# 점수 함수
 # =========================
 
 def score(row):
     s = 0
 
-    if pet_type == "상관없음" or row["type"] == pet_type:
+    if pet_type == "상관없음":
+        s += 3
+    elif row["type"] == pet_type:
         s += 3
 
-    if row["energy"] == activity:
+    if row["energy"] == activity_level:
         s += 3
 
-    if allergy:
-        s += 2 if row["allergy_friendly"] else -2
+    if living_env == "아파트/빌라":
+        if row["size"] == "소형":
+            s += 2
+
+    elif living_env == "단독주택":
+        if row["size"] in ["소형", "중형"]:
+            s += 2
+
+    elif living_env == "마당 있는 집":
+        if row["size"] in ["중형", "대형"]:
+            s += 2
+
+    if has_allergy:
+        if row["allergy_friendly"]:
+            s += 3
+        else:
+            s -= 3
 
     return s
 
-
 # =========================
-# session state
+# session state 초기화
 # =========================
 
 if "top3" not in st.session_state:
@@ -63,31 +101,29 @@ if "top3" not in st.session_state:
 if "selected" not in st.session_state:
     st.session_state.selected = None
 
-
 # =========================
 # 추천 실행
 # =========================
 
-if st.button("추천 보기", type="primary"):
+if st.button("추천 리스트 보기", type="primary"):
 
-    temp = df.copy()
-    temp["score"] = temp.apply(score, axis=1)
+    result = df.copy()
+    result["score"] = result.apply(score, axis=1)
 
-    st.session_state.top3 = temp.sort_values(
+    st.session_state.top3 = result.sort_values(
         "score",
         ascending=False
     ).head(3)
 
     st.session_state.selected = None
 
-
 # =========================
-# TOP3 출력
+# TOP3 출력 (요약 버전)
 # =========================
 
 if st.session_state.top3 is not None:
 
-    st.subheader("🏆 TOP 3 추천")
+    st.success("🏆 추천 TOP 3")
 
     cols = st.columns(len(st.session_state.top3))
 
@@ -96,19 +132,17 @@ if st.session_state.top3 is not None:
         with col:
             with st.container(border=True):
 
+                # ✅ 최소 정보만 표시
                 st.markdown(f"### 🐾 {row['breed']}")
-                st.write(f"{row['type']} · {row['size']}")
-                st.write(f"활동량: {row['energy']}")
-                st.write(f"💰 {row['cost']}")
+                st.write(f"📏 크기: {row['size']}")
+                st.write(f"📅 수명: {row['life_span']}")
 
-                # 클릭 이벤트
+                # 상세 버튼
                 if st.button("상세 보기", key=row["breed"]):
-
                     st.session_state.selected = row
 
-
 # =========================
-# 상세 정보 출력 (핵심)
+# 상세 정보 출력
 # =========================
 
 if st.session_state.selected is not None:
@@ -121,7 +155,6 @@ if st.session_state.selected is not None:
     st.write(f"🏥 대표 질환: {pet['main_disease']}")
     st.write(f"💰 양육비: {pet['cost']}")
 
-    st.write(f"📏 크기: {pet['size']}")
     st.write(f"⚡ 활동량: {pet['energy']}")
     st.write(f"🧬 털 빠짐: {pet['shedding']}")
     st.write(f"📅 수명: {pet['life_span']}")
