@@ -153,7 +153,7 @@ if st.session_state.selected is not None:
     st.subheader(f"📌 {pet['breed']} 상세 정보")
 
     st.write(f"🏥 대표 질환: {pet['main_disease']}")
-    st.write(f"💰 양육비: {pet['cost']}")
+    st.write(f"💰 양육비(월): {pet['cost']}")
 
     st.write(f"⚡ 활동량: {pet['energy']}")
     st.write(f"🧬 털 빠짐: {pet['shedding']}")
