@@ -8,7 +8,7 @@ import os
 # 1. 프로젝트 최상위 폴더(루트) 절대 경로 계산 (현재 파일 위치 기준 2단계 위)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 프로젝트 루트의 utils.py 를 import 할 수 있도록 시스템 경로 추가
+# 프로젝트 루트의 utils.py 를 import 할 수 있도록 경로 추가
 sys.path.append(BASE_DIR)
 
 import auth
@@ -21,27 +21,34 @@ st.write("내 위치(시/군/구/동)를 선택하면 가까운 반려동물 용
 
 st.divider()
 
-# 2. 데이터 로드 함수
+# 2. 데이터 로드 함수 정의
 @st.cache_data
 def load_data(file_path):
     try:
-        return pd.read_csv(file_path)
+        # utf-8-sig는 한글 깨짐을 방지하고 눈에 안 보이는 공백/BOM을 제거합니다.
+        df = pd.read_csv(file_path, encoding='utf-8-sig')
+        
+        # 글자 앞뒤에 혹시나 들어가 있을지 모르는 모든 공백 제거 (글자 사이 공백 제외)
+        df.columns = df.columns.str.strip() 
+        
+        return df
     except Exception as e:
         st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
         return pd.DataFrame()
 
-# ★ 수정된 부분: 최상위 폴더 기준으로 data/stores.csv의 절대 경로 생성
+# ★ [수정 및 추가된 부분] 파일의 절대 경로를 생성하고 함수를 호출하여 df에 대입합니다.
 CSV_PATH = os.path.join(BASE_DIR, "data", "stores.csv")
 df = load_data(CSV_PATH)
 
+# 3. 데이터가 정상적으로 로드되었는지 확인 후 렌더링
 if df.empty:
-    st.warning("표시할 가게 데이터가 없습니다. data 폴더 안에 stores.csv 파일이 있는지 확인해주세요.")
+    st.warning("표시할 가게 데이터가 없습니다. data 폴더 안에 stores.csv 파일이 올바르게 있는지 확인해주세요.")
 else:
-    # 3. 지역 선택 필터 적용
+    # 4. 지역 선택 필터 적용
     sido, sigungu, dong = region_selectors(df, key_prefix="shop")
     filtered = filter_places(df, sido, sigungu, dong)
     
-    # 4. 지도 및 목록 렌더링
+    # 5. 지도 및 목록 렌더링
     st.subheader(f"📍 검색 결과: {len(filtered)}개의 용품점")
     
     if not filtered.empty:
