@@ -27,7 +27,7 @@ def load_data(file_path):
         st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
         return pd.DataFrame()
 
-df = load_data("stores.csv") # 실제 경로에 맞게 수정
+df = load_places("data/stores.csv")
 
 if df.empty:
     st.warning("표시할 가게 데이터가 없습니다.")
