@@ -2,10 +2,15 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+import sys
+import os
 
-# 프로젝트 루트의 utils.py 를 import 할 수 있도록 경로 추가
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 1. 프로젝트 최상위 폴더(루트) 절대 경로 계산 (현재 파일 위치 기준 2단계 위)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 프로젝트 루트의 utils.py 를 import 할 수 있도록 시스템 경로 추가
+sys.path.append(BASE_DIR)
+
 import auth
 from utils import load_places, region_selectors, filter_places
 
@@ -16,9 +21,7 @@ st.write("내 위치(시/군/구/동)를 선택하면 가까운 반려동물 용
 
 st.divider()
 
-# 1. 데이터 로드 (위도, 경도 컬럼이 필수)
-# utils.py의 load_places 대신 직접 pandas로 로드하는 예시입니다.
-# utils.py를 그대로 사용하셔도 됩니다 (단, 반환값이 pandas DataFrame이어야 함)
+# 2. 데이터 로드 함수
 @st.cache_data
 def load_data(file_path):
     try:
@@ -27,17 +30,18 @@ def load_data(file_path):
         st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
         return pd.DataFrame()
 
-df = load_places("data/stores.csv")
+# ★ 수정된 부분: 최상위 폴더 기준으로 data/stores.csv의 절대 경로 생성
+CSV_PATH = os.path.join(BASE_DIR, "data", "stores.csv")
+df = load_data(CSV_PATH)
 
 if df.empty:
-    st.warning("표시할 가게 데이터가 없습니다.")
+    st.warning("표시할 가게 데이터가 없습니다. data 폴더 안에 stores.csv 파일이 있는지 확인해주세요.")
 else:
-    # 2. 지역 선택 필터 적용
-    # utils.py 의 region_selectors 와 filter_places 를 사용한다고 가정
+    # 3. 지역 선택 필터 적용
     sido, sigungu, dong = region_selectors(df, key_prefix="shop")
     filtered = filter_places(df, sido, sigungu, dong)
     
-    # 3. 지도 및 목록 렌더링
+    # 4. 지도 및 목록 렌더링
     st.subheader(f"📍 검색 결과: {len(filtered)}개의 용품점")
     
     if not filtered.empty:
