@@ -146,9 +146,14 @@ if st.session_state.top3 is not None:
     else:
         st.success("🏆 추천 TOP 3")
 
-    cols = st.columns(len(st.session_state.top3))
+    for i in range(0, len(st.session_state.top3), 3):
 
-    for col, (_, row) in zip(cols, st.session_state.top3.iterrows()):
+    cols = st.columns(3)
+
+    for col, (_, row) in zip(
+        cols,
+        st.session_state.top3.iloc[i:i+3].iterrows()
+    ):
 
         with col:
             with st.container(border=True):
