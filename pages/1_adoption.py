@@ -277,7 +277,13 @@ def haversine(lat1, lon1, lat2, lon2):
 # =========================
 # CSV 로드 (petshop.csv)
 # =========================
-df = pd.read_csv("petshop.csv")
+import os
+import pandas as pd
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "..", "data", "petshop.csv")
+
+df = pd.read_csv(CSV_PATH)
 
 st.title("🐶 부산 반려동물 입양처 위치 기반 서비스")
 
