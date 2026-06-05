@@ -129,23 +129,22 @@ if st.session_state.top3 is not None:
 
     for col, (_, row) in zip(cols, st.session_state.top3.iterrows()):
 
-    with col:
-        with st.container(border=True):
+        with col:
+            with st.container(border=True):
 
-            # 동물 종류에 따라 이모지 변경
-            if row["type"] == "강아지":
-                emoji = "🐶"
-            elif row["type"] == "고양이":
-                emoji = "😺"
-            else:
-                emoji = "🐾"
+                # 동물 종류에 따라 이모지 변경
+                if row["type"] == "강아지":
+                    emoji = "🐶"
+                elif row["type"] == "고양이":
+                    emoji = "😺"
+                else:
+                    emoji = "🐾"
 
-            st.markdown(f"### {emoji} {row['breed']}")
-            st.write(f"📏 크기: {row['size']}")
+                st.markdown(f"### {emoji} {row['breed']}")
+                st.write(f"📏 크기: {row['size']}")
 
-            if st.button("상세 보기", key=row["breed"]):
-                st.session_state.selected = row
-
+                if st.button("상세 보기", key=row["breed"]):
+                    st.session_state.selected = row
 # =========================
 # 상세 정보 출력
 # =========================
