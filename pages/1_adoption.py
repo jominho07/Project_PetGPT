@@ -246,3 +246,109 @@ if st.session_state.selected is not None:
 
     if st.button("닫기"):
         st.session_state.selected = None
+
+
+import streamlit as st
+import pandas as pd
+import math
+import folium
+from streamlit_folium import st_folium
+from streamlit_js_eval import streamlit_js_eval
+
+
+# =========================
+# 거리 계산 함수
+# =========================
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371  # km
+
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+
+    a = (math.sin(dlat/2)**2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlon/2)**2)
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+
+# =========================
+# CSV 로드 (petshop.csv)
+# =========================
+df = pd.read_csv("petshop.csv")
+
+st.title("🐶 부산 반려동물 입양처 위치 기반 서비스")
+
+# =========================
+# 실시간 위치 (GPS)
+# =========================
+location = streamlit_js_eval(
+    js_expressions="navigator.geolocation.getCurrentPosition((p)=>[p.coords.latitude,p.coords.longitude]);",
+    key="gps"
+)
+
+if location is None:
+    st.warning("📍 위치 권한을 허용해주세요.")
+    st.stop()
+
+user_lat, user_lon = location
+
+st.success(f"📍 현재 위치: {user_lat:.4f}, {user_lon:.4f}")
+
+# =========================
+# 반경 설정
+# =========================
+radius = st.slider("검색 반경 (km)", 1, 20, 5)
+
+# =========================
+# 거리 계산
+# =========================
+df["distance"] = df.apply(
+    lambda r: haversine(user_lat, user_lon, r["lat"], r["lon"]),
+    axis=1
+)
+
+nearby = df[df["distance"] <= radius].sort_values("distance")
+
+# =========================
+# 지도 생성
+# =========================
+m = folium.Map(location=[user_lat, user_lon], zoom_start=13)
+
+# 내 위치
+folium.Marker(
+    [user_lat, user_lon],
+    popup="📍 내 위치",
+    icon=folium.Icon(color="blue")
+).add_to(m)
+
+# 입양처 마커
+for _, r in nearby.iterrows():
+    folium.Marker(
+        [r["lat"], r["lon"]],
+        popup=f"{r['name']} ({r['distance']:.2f} km)",
+        icon=folium.Icon(color="green")
+    ).add_to(m)
+
+# =========================
+# 리스트 출력
+# =========================
+st.subheader("📌 가까운 입양처")
+
+if nearby.empty:
+    st.warning("근처 입양처가 없습니다.")
+else:
+    for _, r in nearby.iterrows():
+        st.write(f"""
+        🏠 **{r['name']}**
+        - 동물: {r['animal_type']}
+        - 거리: {r['distance']:.2f} km
+        """)
+
+# =========================
+# 지도 출력
+# =========================
+st.subheader("🗺 지도")
+st_folium(m, width=700, height=500)
