@@ -148,7 +148,7 @@ if st.session_state.top3 is not None:
 
     for i in range(0, len(st.session_state.top3), 3):
 
-    cols = st.columns(3)
+        cols = st.columns(3)
 
     for col, (_, row) in zip(
         cols,
