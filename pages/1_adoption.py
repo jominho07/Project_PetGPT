@@ -142,34 +142,79 @@ if st.button("추천 리스트 보기", type="primary"):
 if st.session_state.top3 is not None:
 
     if pet_type == "상관없음":
-        st.success("🏆 강아지 TOP 3 + 고양이 TOP 3")
-    else:
-        st.success("🏆 추천 TOP 3")
 
-    for i in range(0, len(st.session_state.top3), 3):
+        dog_top3 = st.session_state.top3[
+            st.session_state.top3["type"] == "강아지"
+        ]
+
+        cat_top3 = st.session_state.top3[
+            st.session_state.top3["type"] == "고양이"
+        ]
+
+        st.success("🏆 강아지 TOP 3")
 
         cols = st.columns(3)
 
-    for col, (_, row) in zip(
-        cols,
-        st.session_state.top3.iloc[i:i+3].iterrows()
-    ):
+        for col, (_, row) in zip(cols, dog_top3.iterrows()):
 
-        with col:
-            with st.container(border=True):
+            with col:
+                with st.container(border=True):
 
-                if row["type"] == "강아지":
-                    emoji = "🐶"
-                elif row["type"] == "고양이":
-                    emoji = "😺"
-                else:
-                    emoji = "🐾"
+                    st.markdown(f"### 🐶 {row['breed']}")
+                    st.write(f"📏 크기: {row['size']}")
 
-                st.markdown(f"### {emoji} {row['breed']}")
-                st.write(f"📏 크기: {row['size']}")
+                    if st.button(
+                        "상세 보기",
+                        key=f"dog_{row['breed']}"
+                    ):
+                        st.session_state.selected = row
 
-                if st.button("상세 보기", key=row["breed"]):
-                    st.session_state.selected = row
+        st.success("🏆 고양이 TOP 3")
+
+        cols = st.columns(3)
+
+        for col, (_, row) in zip(cols, cat_top3.iterrows()):
+
+            with col:
+                with st.container(border=True):
+
+                    st.markdown(f"### 😺 {row['breed']}")
+                    st.write(f"📏 크기: {row['size']}")
+
+                    if st.button(
+                        "상세 보기",
+                        key=f"cat_{row['breed']}"
+                    ):
+                        st.session_state.selected = row
+
+    else:
+
+        st.success("🏆 추천 TOP 3")
+
+        cols = st.columns(3)
+
+        for col, (_, row) in zip(
+            cols,
+            st.session_state.top3.iterrows()
+        ):
+
+            with col:
+                with st.container(border=True):
+
+                    emoji = (
+                        "🐶"
+                        if row["type"] == "강아지"
+                        else "😺"
+                    )
+
+                    st.markdown(f"### {emoji} {row['breed']}")
+                    st.write(f"📏 크기: {row['size']}")
+
+                    if st.button(
+                        "상세 보기",
+                        key=row["breed"]
+                    ):
+                        st.session_state.selected = row
 # =========================
 # 상세 정보 출력
 # =========================
