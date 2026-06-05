@@ -110,10 +110,28 @@ if st.button("추천 리스트 보기", type="primary"):
     result = df.copy()
     result["score"] = result.apply(score, axis=1)
 
-    st.session_state.top3 = result.sort_values(
-        "score",
-        ascending=False
-    ).head(3)
+    if pet_type == "상관없음":
+
+        dog_top3 = (
+            result[result["type"] == "강아지"]
+            .sort_values("score", ascending=False)
+            .head(3)
+        )
+
+        cat_top3 = (
+            result[result["type"] == "고양이"]
+            .sort_values("score", ascending=False)
+            .head(3)
+        )
+
+        st.session_state.top3 = pd.concat([dog_top3, cat_top3])
+
+    else:
+
+        st.session_state.top3 = result.sort_values(
+            "score",
+            ascending=False
+        ).head(3)
 
     st.session_state.selected = None
 
@@ -123,7 +141,10 @@ if st.button("추천 리스트 보기", type="primary"):
 
 if st.session_state.top3 is not None:
 
-    st.success("🏆 추천 TOP 3")
+    if pet_type == "상관없음":
+        st.success("🏆 강아지 TOP 3 + 고양이 TOP 3")
+    else:
+        st.success("🏆 추천 TOP 3")
 
     cols = st.columns(len(st.session_state.top3))
 
@@ -132,7 +153,6 @@ if st.session_state.top3 is not None:
         with col:
             with st.container(border=True):
 
-                # 동물 종류에 따라 이모지 변경
                 if row["type"] == "강아지":
                     emoji = "🐶"
                 elif row["type"] == "고양이":
