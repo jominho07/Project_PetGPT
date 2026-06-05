@@ -48,6 +48,14 @@ with col1:
         ["아파트/빌라", "단독주택", "마당 있는 집"]
     )
 
+if "last_pet_type" not in st.session_state:
+    st.session_state.last_pet_type = pet_type
+
+if st.session_state.last_pet_type != pet_type:
+    st.session_state.top3 = None
+    st.session_state.selected = None
+    st.session_state.last_pet_type = pet_type
+
 with col2:
     activity_level = st.select_slider(
         "활동량",
