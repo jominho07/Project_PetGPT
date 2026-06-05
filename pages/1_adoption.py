@@ -129,17 +129,22 @@ if st.session_state.top3 is not None:
 
     for col, (_, row) in zip(cols, st.session_state.top3.iterrows()):
 
-        with col:
-            with st.container(border=True):
+    with col:
+        with st.container(border=True):
 
-                # ✅ 최소 정보만 표시
-                st.markdown(f"### 🐾 {row['breed']}")
-                st.write(f"📏 크기: {row['size']}")
-                st.write(f"📅 수명: {row['life_span']}")
+            # 동물 종류에 따라 이모지 변경
+            if row["type"] == "강아지":
+                emoji = "🐶"
+            elif row["type"] == "고양이":
+                emoji = "😺"
+            else:
+                emoji = "🐾"
 
-                # 상세 버튼
-                if st.button("상세 보기", key=row["breed"]):
-                    st.session_state.selected = row
+            st.markdown(f"### {emoji} {row['breed']}")
+            st.write(f"📏 크기: {row['size']}")
+
+            if st.button("상세 보기", key=row["breed"]):
+                st.session_state.selected = row
 
 # =========================
 # 상세 정보 출력
@@ -157,7 +162,7 @@ if st.session_state.selected is not None:
 
     st.write(f"⚡ 활동량: {pet['energy']}")
     st.write(f"🧬 털 빠짐: {pet['shedding']}")
-    st.write(f"📅 수명: {pet['life_span']}")
+
 
     if pet["allergy_friendly"]:
         st.success("알러지 친화 품종")
