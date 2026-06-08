@@ -9,9 +9,25 @@ from db import upsert_pet
 auth.login_widget()
 
 st.title("🥗 건강한 맞춤 식단 매니저")
-st.write("반려동물의 상태를 입력하면 하루 권장 칼로리와 맞춤 영양 가이드를 제공합니다.")
+st.write("품종 데이터와 반려동물 상태를 기반으로 하루 권장 칼로리와 맞춤 사료를 추천합니다.")
 
 st.divider()
+
+# =========================
+# CSV 로드
+# =========================
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BREEDS_PATH = os.path.join(BASE_DIR, "data", "breeds.csv")
+
+breed_df = pd.read_csv(BREEDS_PATH)
+
+breed_df["allergy_friendly"] = (
+    breed_df["allergy_friendly"]
+    .astype(str)
+    .str.lower()
+    .eq("true")
+)
 
 # =========================
 # 기본 데이터
@@ -37,6 +53,18 @@ NUTRIENT_GUIDE = {
     "눈물 자국": {
         "성분": "저알러지 단백질, 오메가3, 충분한 수분",
         "설명": "알러지 가능성과 수분 섭취를 함께 관리하는 것이 좋아요."
+    },
+    "요로/신장": {
+        "성분": "충분한 수분, 마그네슘 조절, 요로 건강 사료",
+        "설명": "고양이나 요로 문제가 있는 품종은 수분 섭취 관리가 중요해요."
+    },
+    "심장": {
+        "성분": "타우린, 오메가3, 저나트륨 식단",
+        "설명": "심장 질환 위험이 있는 품종은 나트륨과 지방 관리가 중요해요."
+    },
+    "치아": {
+        "성분": "치석 관리 사료, 덴탈 간식, 저당 식단",
+        "설명": "치아 질환이 쉬운 품종은 치석 관리가 필요해요."
     },
 }
 
@@ -80,13 +108,31 @@ FEED_DATA = [
         "특징": "글루코사민, 콘드로이틴 함유"
     },
     {
+        "제품명": "덴탈 케어 사료",
+        "대상": "강아지",
+        "추천 고민": "치아",
+        "kcal_per_100g": 340,
+        "가격": 33000,
+        "용량": "2kg",
+        "특징": "치석 관리, 구강 건강 도움"
+    },
+    {
+        "제품명": "하트 케어 사료",
+        "대상": "강아지",
+        "추천 고민": "심장",
+        "kcal_per_100g": 345,
+        "가격": 41000,
+        "용량": "2kg",
+        "특징": "저나트륨, 심장 건강 관리"
+    },
+    {
         "제품명": "캣 유리너리 케어",
         "대상": "고양이",
-        "추천 고민": "소화/장",
+        "추천 고민": "요로/신장",
         "kcal_per_100g": 350,
         "가격": 32000,
         "용량": "2kg",
-        "특징": "수분 섭취 관리, 장 건강 도움"
+        "특징": "요로 건강, 수분 섭취 관리"
     },
     {
         "제품명": "캣 헤어 앤 스킨",
@@ -105,6 +151,24 @@ FEED_DATA = [
         "가격": 30000,
         "용량": "2kg",
         "특징": "저칼로리, 체중 관리용"
+    },
+    {
+        "제품명": "캣 조인트 케어",
+        "대상": "고양이",
+        "추천 고민": "관절/뼈",
+        "kcal_per_100g": 355,
+        "가격": 39000,
+        "용량": "2kg",
+        "특징": "관절 건강 관리"
+    },
+    {
+        "제품명": "캣 하트 케어",
+        "대상": "고양이",
+        "추천 고민": "심장",
+        "kcal_per_100g": 340,
+        "가격": 42000,
+        "용량": "2kg",
+        "특징": "타우린, 저나트륨 관리"
     },
 ]
 
@@ -133,21 +197,61 @@ def calc_calories(weight_kg, age, species, neutered, weight_control):
 
 def get_body_message(body_status):
     if body_status == "마른 편":
-        return "현재 체중이 낮은 편이라 급격한 다이어트보다는 충분한 영양 섭취가 중요해요."
+        return "현재 체중이 낮은 편이라 충분한 영양 섭취가 중요해요."
     elif body_status == "적정":
         return "현재 상태를 유지할 수 있도록 일정한 급여량과 활동량을 관리해 주세요."
     else:
-        return "체중 관리가 필요할 수 있어요. 간식량과 하루 총 칼로리를 함께 줄이는 것이 좋아요."
+        return "체중 관리가 필요할 수 있어요. 간식량과 하루 총 칼로리를 함께 조절하는 것이 좋아요."
 
 
-def recommend_feeds(species, health_issues):
-    if not health_issues:
-        return feed_df[feed_df["대상"] == species]
+def disease_to_issues(disease):
+    disease = str(disease)
 
-    return feed_df[
+    issues = []
+
+    if any(word in disease for word in ["슬개골", "관절", "고관절", "디스크", "척추"]):
+        issues.append("관절/뼈")
+
+    if any(word in disease for word in ["피부", "피부염", "알레르기", "탈모", "눈물"]):
+        issues.append("피부/모질")
+
+    if any(word in disease for word in ["비만"]):
+        issues.append("체중 조절")
+
+    if any(word in disease for word in ["소화", "장"]):
+        issues.append("소화/장")
+
+    if any(word in disease for word in ["요로", "결석", "신장"]):
+        issues.append("요로/신장")
+
+    if any(word in disease for word in ["심장", "HCM", "DCM"]):
+        issues.append("심장")
+
+    if any(word in disease for word in ["치아", "치석"]):
+        issues.append("치아")
+
+    return issues
+
+
+def recommend_feeds(species, user_issues, breed_info):
+    disease_issues = disease_to_issues(breed_info["main_disease"])
+
+    all_issues = []
+
+    for issue in user_issues + disease_issues:
+        if issue not in all_issues:
+            all_issues.append(issue)
+
+    result = feed_df[
         (feed_df["대상"] == species) &
-        (feed_df["추천 고민"].isin(health_issues))
-    ]
+        (feed_df["추천 고민"].isin(all_issues))
+    ].copy()
+
+    if result.empty:
+        result = feed_df[feed_df["대상"] == species].copy()
+
+    return result, disease_issues, all_issues
+
 
 # =========================
 # 세션 저장
@@ -168,18 +272,40 @@ with st.container(border=True):
     col1, col2 = st.columns(2)
 
     with col1:
-        age = st.number_input("나이 (세)", min_value=0, max_value=30, step=1)
         species = st.radio("종류", ["강아지", "고양이"], horizontal=True)
-        body_status = st.selectbox("체형 상태", ["마른 편", "적정", "통통한 편"])
+
+        breed_options = breed_df[
+            breed_df["type"] == species
+        ]["breed"].tolist()
+
+        selected_breed = st.selectbox("품종", breed_options)
+
+        age = st.number_input("나이 (세)", min_value=0, max_value=30, step=1)
 
     with col2:
         weight = st.number_input("몸무게 (kg)", min_value=0.0, step=0.1)
         neutered = st.checkbox("중성화 완료", value=True)
+        body_status = st.selectbox("체형 상태", ["마른 편", "적정", "통통한 편"])
         activity = st.selectbox("활동량", ["낮음", "보통", "높음"])
 
+    breed_info = breed_df[
+        breed_df["breed"] == selected_breed
+    ].iloc[0]
+
+    with st.expander("선택한 품종 정보 보기", expanded=True):
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("크기", breed_info["size"])
+        c2.metric("품종 활동량", breed_info["energy"])
+        c3.metric("털 빠짐", breed_info["shedding"])
+
+        st.write(f"🏥 대표 질환: **{breed_info['main_disease']}**")
+        st.write(f"💰 예상 월 양육비: **{breed_info['cost']}**")
+        st.write(f"⏳ 평균 수명: **{breed_info['life_span']}**")
+
     health_issues = st.multiselect(
-        "특별히 신경 쓰고 싶은 건강 고민",
-        ["관절/뼈", "피부/모질", "체중 조절", "소화/장", "눈물 자국"],
+        "추가로 신경 쓰고 싶은 건강 고민",
+        ["관절/뼈", "피부/모질", "체중 조절", "소화/장", "눈물 자국", "요로/신장", "심장", "치아"],
     )
 
 # =========================
@@ -195,7 +321,14 @@ if st.button("맞춤 식단 분석하기", type="primary"):
         st.warning("몸무게를 입력해 주세요.")
 
     else:
-        weight_control = "체중 조절" in health_issues or body_status == "통통한 편"
+        user_issues = health_issues.copy()
+        disease_issues = disease_to_issues(breed_info["main_disease"])
+
+        weight_control = (
+            "체중 조절" in user_issues
+            or "체중 조절" in disease_issues
+            or body_status == "통통한 편"
+        )
 
         rer, mer = calc_calories(
             weight,
@@ -212,18 +345,31 @@ if st.button("맞춤 식단 분석하기", type="primary"):
 
         grams = mer / 3500 * 1000
 
+        feed_result, disease_issues, all_issues = recommend_feeds(
+            species,
+            user_issues,
+            breed_info
+        )
+
         result = {
             "이름": name,
             "종류": species,
+            "품종": selected_breed,
             "나이": age,
             "몸무게": weight,
             "중성화": "완료" if neutered else "안 함",
             "체형": body_status,
             "활동량": activity,
+            "품종 크기": breed_info["size"],
+            "품종 활동량": breed_info["energy"],
+            "털 빠짐": breed_info["shedding"],
+            "대표 질환": breed_info["main_disease"],
             "하루 권장 칼로리": round(mer),
             "RER": round(rer),
             "권장 사료량(g)": round(grams),
-            "건강 고민": ", ".join(health_issues) if health_issues else "없음"
+            "사용자 고민": ", ".join(user_issues) if user_issues else "없음",
+            "품종 기반 고민": ", ".join(disease_issues) if disease_issues else "없음",
+            "추천 기준": ", ".join(all_issues) if all_issues else "기본 관리"
         }
 
         st.session_state.diet_results.append(result)
@@ -250,6 +396,11 @@ if st.session_state.diet_results:
     st.divider()
     st.subheader(f"📊 {latest['이름']} 맞춤 영양 결과")
 
+    st.caption(
+        f"{latest['종류']} · {latest['품종']} · "
+        f"{latest['나이']}세 · {latest['몸무게']}kg"
+    )
+
     m1, m2, m3 = st.columns(3)
 
     m1.metric("하루 권장 칼로리", f"{latest['하루 권장 칼로리']:,} kcal")
@@ -263,6 +414,12 @@ if st.session_state.diet_results:
 
     st.write(get_body_message(latest["체형"]))
 
+    if latest["품종 기반 고민"] != "없음":
+        st.warning(
+            f"선택한 품종의 대표 질환을 바탕으로 "
+            f"**{latest['품종 기반 고민']}** 관리가 함께 추천됩니다."
+        )
+
     # =========================
     # 건강 고민별 추천 영양 성분
     # =========================
@@ -270,32 +427,42 @@ if st.session_state.diet_results:
     st.divider()
     st.subheader("🧬 건강 고민별 추천 영양 성분")
 
-    if latest["건강 고민"] == "없음":
+    issue_list = latest["추천 기준"].split(", ") if latest["추천 기준"] != "기본 관리" else []
+
+    if not issue_list:
         st.write("특별한 건강 고민이 없다면 균형 잡힌 단백질, 지방, 비타민, 미네랄이 중요해요.")
     else:
-        for issue in latest["건강 고민"].split(", "):
-            guide = NUTRIENT_GUIDE[issue]
+        for issue in issue_list:
+            if issue in NUTRIENT_GUIDE:
+                guide = NUTRIENT_GUIDE[issue]
 
-            with st.container(border=True):
-                st.markdown(f"### {issue}")
-                st.write(f"**추천 성분:** {guide['성분']}")
-                st.write(guide["설명"])
+                with st.container(border=True):
+                    st.markdown(f"### {issue}")
+                    st.write(f"**추천 성분:** {guide['성분']}")
+                    st.write(guide["설명"])
 
     # =========================
-    # 시중 사료 비교 검색
+    # 품종 기반 사료 비교 검색
     # =========================
 
     st.divider()
-    st.subheader("🔍 시중 사료 비교 검색")
+    st.subheader("🔍 품종 기반 사료 비교 검색")
 
-    feed_result = recommend_feeds(
-        latest["종류"],
-        latest["건강 고민"].split(", ") if latest["건강 고민"] != "없음" else []
+    latest_breed_info = breed_df[
+        breed_df["breed"] == latest["품종"]
+    ].iloc[0]
+
+    user_issues = (
+        latest["사용자 고민"].split(", ")
+        if latest["사용자 고민"] != "없음"
+        else []
     )
 
-    if feed_result.empty:
-        st.warning("조건에 맞는 사료가 없어 기본 사료 목록을 보여드릴게요.")
-        feed_result = feed_df[feed_df["대상"] == latest["종류"]]
+    feed_result, disease_issues, all_issues = recommend_feeds(
+        latest["종류"],
+        user_issues,
+        latest_breed_info
+    )
 
     display_feed = feed_result.copy()
 
@@ -330,6 +497,7 @@ if st.session_state.diet_results:
         f"💰 가성비 추천 사료: **{cheapest['제품명']}** "
         f"({cheapest['100g당 가격']:.0f}원 / 100g)"
     )
+
     # =========================
     # 위험 음식 목록
     # =========================
