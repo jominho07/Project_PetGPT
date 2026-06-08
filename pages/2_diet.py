@@ -297,35 +297,39 @@ if st.session_state.diet_results:
         st.warning("조건에 맞는 사료가 없어 기본 사료 목록을 보여드릴게요.")
         feed_result = feed_df[feed_df["대상"] == latest["종류"]]
 
-    st.dataframe(
-        feed_result = feed_result.copy()
+    display_feed = feed_result.copy()
 
-feed_result["가격"] = feed_result["가격"].apply(
-    lambda x: f"{x:,}원"
-)
-
-feed_result["100g당 가격"] = feed_result["100g당 가격"].apply(
-    lambda x: f"{x:,.0f}원"
-)
-
-st.dataframe(
-    feed_result[
-        [
-            "제품명",
-            "대상",
-            "추천 고민",
-            "kcal_per_100g",
-            "가격",
-            "용량",
-            "100g당 가격",
-            "특징"
-        ]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
+    display_feed["가격"] = display_feed["가격"].apply(
+        lambda x: f"{x:,}원"
     )
 
+    display_feed["100g당 가격"] = display_feed["100g당 가격"].apply(
+        lambda x: f"{x:,.0f}원"
+    )
+
+    st.dataframe(
+        display_feed[
+            [
+                "제품명",
+                "대상",
+                "추천 고민",
+                "kcal_per_100g",
+                "가격",
+                "용량",
+                "100g당 가격",
+                "특징"
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    cheapest = feed_result.sort_values("100g당 가격").iloc[0]
+
+    st.success(
+        f"💰 가성비 추천 사료: **{cheapest['제품명']}** "
+        f"({cheapest['100g당 가격']:.0f}원 / 100g)"
+    )
     # =========================
     # 위험 음식 목록
     # =========================
