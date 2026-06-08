@@ -15,7 +15,7 @@ st.write("예방접종·구충 같은 반복 일정부터 병원 진료 내용�
 pets = get_pets()                            # [{id, name, ...}, ...]
 pet_options = {p["name"]: p["id"] for p in pets}   # 드롭다운 표시용
 
-tab_schedule, tab_record, tab_medication = st.tabs(["📅 케어 일정", "🏥 진료 기록", "💊 투약 알림"])
+tab_schedule, tab_record, tab_medication = st.tabs(["📅 케어 일정", "🏥 진료 기록", "💊 투약 관리"])
 
 
 def pet_picker(label, key, allow_text=True):
