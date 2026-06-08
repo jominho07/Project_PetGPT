@@ -173,10 +173,12 @@ FEED_DATA = [
     },
 ]
 
-# 프로필 사진 추가 기능
-
 feed_df = pd.DataFrame(FEED_DATA)
 feed_df["100g당 가격"] = feed_df["가격"] / 20
+
+# =========================
+# 프로필 사진 함수
+# =========================
 
 def image_to_base64(uploaded_file):
     if uploaded_file is None:
@@ -226,7 +228,6 @@ def get_body_message(body_status):
 
 def disease_to_issues(disease):
     disease = str(disease)
-
     issues = []
 
     if any(word in disease for word in ["슬개골", "관절", "고관절", "디스크", "척추"]):
@@ -289,7 +290,7 @@ st.subheader("🐾 반려동물 프로필 등록")
 with st.container(border=True):
     name = st.text_input("반려동물 이름", placeholder="예: 멍멍이")
 
-     profile_image = st.file_uploader(
+    profile_image = st.file_uploader(
         "프로필 사진",
         type=["png", "jpg", "jpeg"],
         key="profile_image"
@@ -374,7 +375,7 @@ if st.button("맞춤 식단 분석하기", type="primary"):
 
         grams = mer / 3500 * 1000
 
-        feed_result, disease_issues, all_issues = recommend_feeds(
+        _, disease_issues, all_issues = recommend_feeds(
             species,
             user_issues,
             breed_info
@@ -553,7 +554,10 @@ if st.session_state.diet_results:
 
     result_df = pd.DataFrame(st.session_state.diet_results)
 
-      display_df = result_df.drop(columns=["프로필 사진"], errors="ignore")
+    display_df = result_df.drop(
+        columns=["프로필 사진"],
+        errors="ignore"
+    )
 
     st.dataframe(
         display_df,
@@ -573,10 +577,24 @@ if st.session_state.diet_results:
 
     selected_index = profile_names.index(selected_profile)
     selected_pet = st.session_state.diet_results[selected_index]
+
     show_profile_image(selected_pet.get("프로필 사진"), width=140)
 
     with st.container(border=True):
         st.markdown(f"### ✏️ {selected_pet['이름']} 프로필 수정")
+
+        edit_profile_image = st.file_uploader(
+            "프로필 사진 변경",
+            type=["png", "jpg", "jpeg"],
+            key="edit_profile_image"
+        )
+
+        if edit_profile_image:
+            st.image(
+                edit_profile_image,
+                caption="새 프로필 사진",
+                width=150
+            )
 
         edit_name = st.text_input(
             "이름 수정",
@@ -704,6 +722,11 @@ if st.session_state.diet_results:
                 )
 
                 st.session_state.diet_results[selected_index] = {
+                    "프로필 사진": (
+                        image_to_base64(edit_profile_image)
+                        if edit_profile_image
+                        else selected_pet.get("프로필 사진")
+                    ),
                     "이름": edit_name,
                     "종류": edit_species,
                     "품종": edit_breed,
