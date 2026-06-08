@@ -258,6 +258,7 @@ if st.session_state.selected is not None:
 
     if location is None:
         st.warning("📍 브라우저에서 위치 권한을 허용해주세요.")
+
     else:
         user_lat = location["coords"]["latitude"]
         user_lon = location["coords"]["longitude"]
@@ -265,77 +266,96 @@ if st.session_state.selected is not None:
         st.success(f"현재 위치: {user_lat:.4f}, {user_lon:.4f}")
 
         selected_type = pet["type"]
+        selected_breed = pet["breed"]
 
         filtered_shop = shop_df[
-            shop_df["animal_type"] == selected_type
+            (shop_df["animal_type"] == selected_type) &
+            (
+                shop_df["breed"]
+                .astype(str)
+                .str.contains(selected_breed, na=False)
+            )
         ].copy()
 
-        filtered_shop["distance"] = filtered_shop.apply(
-            lambda r: haversine(
-                user_lat,
-                user_lon,
-                r["lat"],
-                r["lon"]
-            ),
-            axis=1
-        )
+        if filtered_shop.empty:
+            st.warning(f"현재 {selected_breed} 입양 가능 장소가 없습니다.")
 
-        filtered_shop = filtered_shop.sort_values("distance")
+        else:
+            filtered_shop["distance"] = filtered_shop.apply(
+                lambda r: haversine(
+                    user_lat,
+                    user_lon,
+                    r["lat"],
+                    r["lon"]
+                ),
+                axis=1
+            )
 
-        nearest = filtered_shop.iloc[0]
+            filtered_shop = filtered_shop.sort_values("distance")
 
-        st.success(
-            f"가장 가까운 추천 입양처는 "
-            f"**{nearest['name']}** 입니다. "
-            f"거리: {nearest['distance']:.2f}km"
-        )
+            nearest = filtered_shop.iloc[0]
 
-        radius = st.slider("검색 반경 km", 1, 30, 10)
+            st.success(
+                f"가장 가까운 추천 입양처는 "
+                f"**{nearest['name']}** 입니다. "
+                f"거리: {nearest['distance']:.2f}km"
+            )
 
-        nearby = filtered_shop[
-            filtered_shop["distance"] <= radius
-        ].sort_values("distance")
+            radius = st.slider("검색 반경 km", 1, 30, 10)
 
-        m = folium.Map(
-            location=[user_lat, user_lon],
-            zoom_start=12
-        )
+            nearby = filtered_shop[
+                filtered_shop["distance"] <= radius
+            ].sort_values("distance")
 
-        folium.Marker(
-            [user_lat, user_lon],
-            popup="내 위치",
-            tooltip="내 위치",
-            icon=folium.Icon(color="blue", icon="user")
-        ).add_to(m)
-
-        for _, r in nearby.iterrows():
-
-            marker_color = "red" if r["name"] == nearest["name"] else "green"
+            m = folium.Map(
+                location=[user_lat, user_lon],
+                zoom_start=12
+            )
 
             folium.Marker(
-                [r["lat"], r["lon"]],
-                popup=f"""
-                <b>{r['name']}</b><br>
-                동물: {r['animal_type']}<br>
-                거리: {r['distance']:.2f}km
-                """,
-                tooltip=r["name"],
-                icon=folium.Icon(color=marker_color, icon="home")
+                [user_lat, user_lon],
+                popup="내 위치",
+                tooltip="내 위치",
+                icon=folium.Icon(color="blue", icon="user")
             ).add_to(m)
 
-        st_folium(m, width=700, height=500)
-
-        st.subheader("📌 가까운 입양처 목록")
-
-        if nearby.empty:
-            st.warning("검색 반경 안에 입양처가 없습니다.")
-        else:
             for _, r in nearby.iterrows():
-                st.write(f"""
-                🏠 **{r['name']}**
-                - 동물: {r['animal_type']}
-                - 거리: {r['distance']:.2f}km
-                """)
+
+                marker_color = (
+                    "red"
+                    if r["name"] == nearest["name"]
+                    else "green"
+                )
+
+                folium.Marker(
+                    [r["lat"], r["lon"]],
+                    popup=f"""
+                    <b>{r['name']}</b><br>
+                    동물: {r['animal_type']}<br>
+                    입양 가능 품종: {r['breed']}<br>
+                    거리: {r['distance']:.2f}km
+                    """,
+                    tooltip=r["name"],
+                    icon=folium.Icon(
+                        color=marker_color,
+                        icon="home"
+                    )
+                ).add_to(m)
+
+            st_folium(m, width=700, height=500)
+
+            st.subheader("📌 가까운 입양처 목록")
+
+            if nearby.empty:
+                st.warning("검색 반경 안에 입양처가 없습니다.")
+            else:
+                for _, r in nearby.iterrows():
+                    st.write(f"""
+                    🏠 **{r['name']}**
+                    - 동물: {r['animal_type']}
+                    - 입양 가능 품종: {r['breed']}
+                    - 거리: {r['distance']:.2f}km
+                    """)
 
     if st.button("닫기"):
         st.session_state.selected = None
