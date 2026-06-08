@@ -512,13 +512,13 @@ if st.session_state.diet_results:
             st.error(food)
 
 # =========================
-# 다묘·다견 프로필 동시 관리
+# 다묘·다견 프로필 수정/삭제 관리
 # =========================
 
 if st.session_state.diet_results:
 
     st.divider()
-    st.subheader("🐶🐱 다묘·다견 프로필 관리")
+    st.subheader("🐶🐱 저장된 프로필 관리")
 
     result_df = pd.DataFrame(st.session_state.diet_results)
 
@@ -528,10 +528,193 @@ if st.session_state.diet_results:
         hide_index=True
     )
 
-    total_kcal = result_df["하루 권장 칼로리"].sum()
-    total_gram = result_df["권장 사료량(g)"].sum()
+    profile_names = [
+        f"{i + 1}. {pet['이름']} ({pet['품종']})"
+        for i, pet in enumerate(st.session_state.diet_results)
+    ]
 
-    c1, c2 = st.columns(2)
+    selected_profile = st.selectbox(
+        "수정/삭제할 프로필 선택",
+        profile_names
+    )
 
-    c1.metric("전체 하루 필요 칼로리", f"{total_kcal:,} kcal")
-    c2.metric("전체 하루 예상 사료량", f"{total_gram:,} g")
+    selected_index = profile_names.index(selected_profile)
+    selected_pet = st.session_state.diet_results[selected_index]
+
+    with st.container(border=True):
+        st.markdown(f"### ✏️ {selected_pet['이름']} 프로필 수정")
+
+        edit_name = st.text_input(
+            "이름 수정",
+            value=selected_pet["이름"],
+            key="edit_name"
+        )
+
+        edit_species = st.radio(
+            "종류 수정",
+            ["강아지", "고양이"],
+            index=["강아지", "고양이"].index(selected_pet["종류"]),
+            horizontal=True,
+            key="edit_species"
+        )
+
+        edit_breed_options = breed_df[
+            breed_df["type"] == edit_species
+        ]["breed"].tolist()
+
+        old_breed = selected_pet["품종"]
+
+        if old_breed in edit_breed_options:
+            breed_index = edit_breed_options.index(old_breed)
+        else:
+            breed_index = 0
+
+        edit_breed = st.selectbox(
+            "품종 수정",
+            edit_breed_options,
+            index=breed_index,
+            key="edit_breed"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            edit_age = st.number_input(
+                "나이 수정",
+                min_value=0,
+                max_value=30,
+                step=1,
+                value=int(selected_pet["나이"]),
+                key="edit_age"
+            )
+
+            edit_weight = st.number_input(
+                "몸무게 수정",
+                min_value=0.1,
+                step=0.1,
+                value=float(selected_pet["몸무게"]),
+                key="edit_weight"
+            )
+
+        with col2:
+            edit_neutered = st.checkbox(
+                "중성화 완료",
+                value=True if selected_pet["중성화"] == "완료" else False,
+                key="edit_neutered"
+            )
+
+            edit_body_status = st.selectbox(
+                "체형 상태 수정",
+                ["마른 편", "적정", "통통한 편"],
+                index=["마른 편", "적정", "통통한 편"].index(selected_pet["체형"]),
+                key="edit_body_status"
+            )
+
+            edit_activity = st.selectbox(
+                "활동량 수정",
+                ["낮음", "보통", "높음"],
+                index=["낮음", "보통", "높음"].index(selected_pet["활동량"]),
+                key="edit_activity"
+            )
+
+        old_user_issues = (
+            selected_pet["사용자 고민"].split(", ")
+            if selected_pet["사용자 고민"] != "없음"
+            else []
+        )
+
+        edit_health_issues = st.multiselect(
+            "건강 고민 수정",
+            ["관절/뼈", "피부/모질", "체중 조절", "소화/장", "눈물 자국", "요로/신장", "심장", "치아"],
+            default=old_user_issues,
+            key="edit_health_issues"
+        )
+
+        b1, b2 = st.columns(2)
+
+        with b1:
+            if st.button("수정 저장", type="primary"):
+                edit_breed_info = breed_df[
+                    breed_df["breed"] == edit_breed
+                ].iloc[0]
+
+                edit_disease_issues = disease_to_issues(
+                    edit_breed_info["main_disease"]
+                )
+
+                edit_weight_control = (
+                    "체중 조절" in edit_health_issues
+                    or "체중 조절" in edit_disease_issues
+                    or edit_body_status == "통통한 편"
+                )
+
+                edit_rer, edit_mer = calc_calories(
+                    edit_weight,
+                    edit_age,
+                    edit_species,
+                    edit_neutered,
+                    edit_weight_control
+                )
+
+                if edit_activity == "낮음":
+                    edit_mer *= 0.9
+                elif edit_activity == "높음":
+                    edit_mer *= 1.1
+
+                edit_grams = edit_mer / 3500 * 1000
+
+                _, edit_disease_issues, edit_all_issues = recommend_feeds(
+                    edit_species,
+                    edit_health_issues,
+                    edit_breed_info
+                )
+
+                st.session_state.diet_results[selected_index] = {
+                    "이름": edit_name,
+                    "종류": edit_species,
+                    "품종": edit_breed,
+                    "나이": edit_age,
+                    "몸무게": edit_weight,
+                    "중성화": "완료" if edit_neutered else "안 함",
+                    "체형": edit_body_status,
+                    "활동량": edit_activity,
+                    "품종 크기": edit_breed_info["size"],
+                    "품종 활동량": edit_breed_info["energy"],
+                    "털 빠짐": edit_breed_info["shedding"],
+                    "대표 질환": edit_breed_info["main_disease"],
+                    "하루 권장 칼로리": round(edit_mer),
+                    "RER": round(edit_rer),
+                    "권장 사료량(g)": round(edit_grams),
+                    "사용자 고민": ", ".join(edit_health_issues) if edit_health_issues else "없음",
+                    "품종 기반 고민": ", ".join(edit_disease_issues) if edit_disease_issues else "없음",
+                    "추천 기준": ", ".join(edit_all_issues) if edit_all_issues else "기본 관리"
+                }
+
+                upsert_pet(
+                    name=edit_name,
+                    species=edit_species,
+                    age=edit_age,
+                    weight=edit_weight,
+                    neutered=edit_neutered,
+                    mer=round(edit_mer)
+                )
+
+                st.success("프로필이 수정되었습니다.")
+                st.rerun()
+
+        with b2:
+            if st.button("삭제하기"):
+                del st.session_state.diet_results[selected_index]
+                st.success("프로필이 삭제되었습니다.")
+                st.rerun()
+
+    if st.session_state.diet_results:
+        result_df = pd.DataFrame(st.session_state.diet_results)
+
+        total_kcal = result_df["하루 권장 칼로리"].sum()
+        total_gram = result_df["권장 사료량(g)"].sum()
+
+        c1, c2 = st.columns(2)
+
+        c1.metric("전체 하루 필요 칼로리", f"{total_kcal:,} kcal")
+        c2.metric("전체 하루 예상 사료량", f"{total_gram:,} g")
