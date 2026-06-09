@@ -1,6 +1,9 @@
 import streamlit as st
 from datetime import date, timedelta
 import sys, os
+import pandas as pd
+
+# 경로 설정
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth
 from db import (get_pets, get_schedules, add_schedule, complete_schedule,
@@ -9,190 +12,137 @@ from db import (get_pets, get_schedules, add_schedule, complete_schedule,
 auth.login_widget()
 
 st.title("📒 건강 수첩")
-st.write("예방접종·구충 같은 반복 일정부터 병원 진료 내용까지, "
-         "우리 아이의 건강 기록을 한곳에서 관리하세요.")
-
-pets = get_pets()                            # [{id, name, ...}, ...]
-pet_options = {p["name"]: p["id"] for p in pets}   # 드롭다운 표시용
+pets = get_pets()
+pet_options = {p["name"]: p["id"] for p in pets}
 
 tab_schedule, tab_record, tab_medication = st.tabs(["📅 케어 일정", "🏥 진료 기록", "💊 투약 관리"])
 
-
 def pet_picker(label, key, allow_text=True):
-    """반려동물 선택 위젯. 등록된 게 없으면 텍스트 입력으로 대체."""
     if pet_options:
         name = st.selectbox(label, list(pet_options.keys()), key=key)
         return pet_options[name], name
-    if allow_text:
-        name = st.text_input(label, placeholder="이름 입력", key=key + "_txt")
-        return None, name or "미지정"
-    return None, "미지정"
-
+    name = st.text_input(label, placeholder="이름 입력", key=key + "_txt")
+    return None, name or "미지정"
 
 # ════════════════════════════════════════════════════════════════════
 # 탭 1. 케어 일정
 # ════════════════════════════════════════════════════════════════════
 with tab_schedule:
     st.subheader("➕ 일정 추가")
-
     col1, col2 = st.columns(2)
     with col1:
         sch_pet_id, _ = pet_picker("대상 반려동물", "sch_pet")
-        care_type = st.selectbox(
-            "케어 종류",
-            ["예방접종", "심장사상충 약", "구충", "목욕/미용", "건강검진", "생일", "기타"],
-        )
+        care_type = st.selectbox("케어 종류", ["예방접종", "심장사상충 약", "구충", "목욕/미용", "건강검진", "생일", "기타"])
     with col2:
         last_done = st.date_input("최근 시행일", value=date.today())
-        cycle_days = st.number_input("반복 주기 (일)", min_value=0, max_value=365,
-                                     value=30, step=1,
-                                     help="0이면 1회성 일정입니다.")
-
+        cycle_days = st.number_input("반복 주기 (일)", min_value=0, max_value=365, value=30)
     if st.button("일정 등록", type="primary", key="add_schedule"):
-        next_due = last_done + timedelta(days=cycle_days) if cycle_days else last_done
-        add_schedule(sch_pet_id, care_type, last_done, cycle_days, next_due)
-        st.success(f"'{care_type}' 일정이 등록되었어요.")
+        add_schedule(sch_pet_id, care_type, last_done, cycle_days, last_done + timedelta(days=cycle_days))
         st.rerun()
 
-    st.divider()
-
     st.subheader("🔔 다가오는 일정")
-    schedules = get_schedules()
-    if not schedules:
-        st.caption("아직 등록된 일정이 없어요.")
-    else:
-        today = date.today()
-        for s in schedules:
-            next_due = date.fromisoformat(s["next_due"])
-            d_day = (next_due - today).days
-            if d_day < 0:
-                label = f"🔴 {-d_day}일 지남"
-            elif d_day == 0:
-                label = "🟠 오늘"
-            elif d_day <= 7:
-                label = f"🟡 D-{d_day}"
-            else:
-                label = f"🟢 D-{d_day}"
-
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([3, 2, 1])
-                c1.write(f"**{s['pet_name'] or '미지정'}** · {s['care_type']}")
-                c2.write(f"예정일: {next_due}  {label}")
-                if c3.button("완료", key=f"done_{s['id']}"):
-                    complete_schedule(s["id"], today, s["cycle_days"])
-                    st.rerun()
-
+    for s in get_schedules():
+        with st.container(border=True):
+            st.write(f"**{s['pet_name']}** · {s['care_type']}")
+            if st.button("완료", key=f"done_{s['id']}"):
+                complete_schedule(s["id"], date.today(), s["cycle_days"]); st.rerun()
 
 # ════════════════════════════════════════════════════════════════════
 # 탭 2. 진료 기록
 # ════════════════════════════════════════════════════════════════════
 with tab_record:
     st.subheader("🏥 진료 기록 추가")
-    st.caption("병원에서 받은 진단·처방·검사 결과 등을 기록해 두면 다음 진료 때 도움이 됩니다.")
-
     col1, col2 = st.columns(2)
     with col1:
         rec_pet_id, _ = pet_picker("대상 반려동물", "rec_pet")
-        visit_date = st.date_input("진료일", value=date.today(), key="visit_date")
-        hospital = st.text_input("병원 이름", placeholder="예: OO 동물병원")
+        visit_date = st.date_input("진료일", value=date.today())
+        hospital = st.text_input("병원 이름")
     with col2:
-        visit_type = st.selectbox(
-            "진료 유형",
-            ["일반 진료", "예방접종", "정기검진", "수술", "응급", "치과", "기타"],
-        )
-        weight_at_visit = st.number_input("진료 시 체중 (kg)", min_value=0.0, step=0.1,
-                                          help="0이면 기록하지 않습니다.")
+        visit_type = st.selectbox("진료 유형", ["일반 진료", "예방접종", "정기검진", "수술", "응급", "치과", "기타"])
         cost = st.number_input("진료비 (원)", min_value=0, step=1000)
-
-    diagnosis = st.text_input("진단 / 증상", placeholder="예: 외이염, 슬개골 1기")
-    prescription = st.text_area("처방 / 약", placeholder="예: 항생제 7일분, 귀 세정제")
-    memo = st.text_area("메모 / 다음 진료 안내", placeholder="예: 2주 뒤 재방문, 식단 조절 권고")
-
+    diagnosis = st.text_input("진단 / 증상")
     if st.button("진료 기록 저장", type="primary", key="add_record"):
-        if not diagnosis.strip() and not memo.strip():
-            st.warning("진단 내용이나 메모 중 하나는 입력해 주세요.")
-        else:
-            add_record(
-                pet_id=rec_pet_id,
-                visit_date=visit_date,
-                hospital=hospital.strip(),
-                visit_type=visit_type,
-                weight=weight_at_visit if weight_at_visit > 0 else None,
-                cost=cost,
-                diagnosis=diagnosis.strip(),
-                prescription=prescription.strip(),
-                memo=memo.strip(),
-            )
-            st.success("진료 기록이 저장되었어요.")
-            st.rerun()
+        add_record(rec_pet_id, visit_date, hospital, visit_type, 0, cost, diagnosis, "", "")
+        st.rerun()
 
-    st.divider()
-
-    st.subheader("📋 진료 이력")
-
-    # 반려동물 필터
-    filter_pet_id = None
-    if pet_options:
-        flt = st.selectbox("반려동물로 필터", ["전체"] + list(pet_options.keys()),
-                           key="rec_filter")
-        if flt != "전체":
-            filter_pet_id = pet_options[flt]
-
-    records = get_records(pet_id=filter_pet_id)
-
-    if not records:
-        st.caption("아직 진료 기록이 없어요.")
-    else:
-        total_cost = sum(r["cost"] or 0 for r in records)
-        st.metric("누적 진료비", f"{total_cost:,}원")
-
+    records = get_records()
+    if records:
+        df = pd.DataFrame(records)
+        st.download_button("📥 CSV 내보내기", df.to_csv(index=False), "records.csv", "text/csv")
         for r in records:
-            title = f"{r['visit_date']} · {r['pet_name'] or '미지정'} · {r['visit_type']}"
-            with st.expander(title):
-                if r["hospital"]:
-                    st.write(f"🏥 **병원**: {r['hospital']}")
-                if r["diagnosis"]:
-                    st.write(f"🩺 **진단/증상**: {r['diagnosis']}")
-                if r["prescription"]:
-                    st.write(f"💊 **처방/약**: {r['prescription']}")
-                if r["weight"]:
-                    st.write(f"⚖️ **체중**: {r['weight']}kg")
-                if r["cost"]:
-                    st.write(f"💰 **진료비**: {r['cost']:,}원")
-                if r["memo"]:
-                    st.info(f"📝 {r['memo']}")
+            with st.expander(f"{r['visit_date']} · {r['pet_name']} · {r['visit_type']}"):
+                st.write(f"병원: {r['hospital']} / 진단: {r['diagnosis']}")
+                if st.button("삭제", key=f"del_{r['id']}"): delete_record(r['id']); st.rerun()
 
-                if st.button("이 기록 삭제", key=f"del_rec_{r['id']}"):
-                    delete_record(r["id"])
-                    st.rerun()
-                  # ════════════════════════════════════════════════════════════════════
-# 탭 3. 투약 관리 (추가된 부분)
+# ════════════════════════════════════════════════════════════════════
+# 탭 3. 투약 관리 (요일 선택 잔상 문제 해결 버전)
 # ════════════════════════════════════════════════════════════════════
 with tab_medication:
-    st.subheader("💊 투약 관리 및 알림")
-    st.caption("매일 챙겨야 하는 약(영양제, 처방약 등)의 복용 여부를 체크하고 준수율을 확인하세요.")
-
-    # 1. 대상 반려동물 선택
-    med_pet_id, pet_name = pet_picker("대상 반려동물", "med_pet")
+    st.subheader("💊 맞춤형 투약 관리")
     
-    st.divider()
-
-    # 2. 오늘의 복용 체크 (요구사항: 사용자가 '복용 완료'를 누르면 History 테이블에 기록)
-    st.markdown(f"#### ✅ {pet_name}의 오늘 투약 체크")
+    # 1. 폼 밖에서 주기를 먼저 선택 (이래야 UI가 즉시 갱신됨)
+    med_name = st.text_input("약 이름")
+    cycle = st.selectbox("반복 주기", ["매일", "매주", "매월", "매년"])
     
-    # 예시용 약 이름 입력 (실제로는 DB에서 현재 복용 중인 약 목록을 불러와야 함)
-    med_name = st.text_input("복용할 약 이름", placeholder="예: 심장약, 관절 영양제")
-    
-    if st.button("복용 완료 기록하기", type="primary", key="med_done"):
-        if med_name.strip():
-            # TODO: 여기에 History 테이블에 기록하는 DB 함수를 연결해야 합니다.
-            # 예: add_medication_history(med_pet_id, med_name, date.today())
-            st.success(f"오늘({date.today()}) {med_name} 복용 기록이 저장되었습니다! 📈")
-        else:
-            st.warning("약 이름을 입력해 주세요.")
+    # 2. 선택값에 따라 동적으로 입력 필드 분기
+    sub_opt = None
+    if cycle == "매주":
+        sub_opt = st.multiselect("요일 선택", ["월", "화", "수", "목", "금", "토", "일"])
+    elif cycle == "매월":
+        sub_opt = st.number_input("날짜 선택", 1, 31, 1)
+    elif cycle == "매년":
+        sub_opt = st.date_input("날짜 선택")
             
-    st.divider()
+    end_date = st.date_input("반복 종료일")
     
-    # 3. 복용 준수율 통계 (요구사항: 복용 준수율 통계 제공)
-    st.markdown("#### 📊 복용 준수율 통계")
-    st.info("준수율 시각화 및 예정일 알림 기능이 여기에 들어갑니다.")
+    # 3. 마지막에 버튼을 눌러 저장
+    if st.button("추가하기"):
+        if med_name:
+            if "med_list" not in st.session_state: st.session_state.med_list = []
+            st.session_state.med_list.append({"name": med_name, "cycle": cycle, "opt": sub_opt, "end": end_date})
+            st.rerun()
+
+   # 2. 오늘 복용 체크 섹션 (수정된 로직)
+    st.markdown("### ✅ 오늘 먹어야 할 약")
+    today = date.today()
+    
+    if "med_list" in st.session_state:
+        # 체크박스 상태 변경을 추적할 세션
+        if "checked_state" not in st.session_state:
+            st.session_state.checked_state = {}
+
+        for idx, med in enumerate(st.session_state.med_list):
+            if med["end"] >= today:
+                # ... (should_take 계산 로직은 동일) ...
+                opt = med.get("opt")
+                should_take = False
+                if med["cycle"] == "매일": should_take = True
+                elif med["cycle"] == "매주" and opt:
+                    curr_day = ["월","화","수","목","금","토","일"][today.weekday()]
+                    should_take = curr_day in opt
+                elif med["cycle"] == "매월" and opt: should_take = (today.day == opt)
+                elif med["cycle"] == "매년" and opt: should_take = (today.month == opt.month and today.day == opt.day)
+                
+                if should_take:
+                    # 현재 체크박스 상태
+                    key = f"check_{idx}"
+                    was_checked = st.session_state.checked_state.get(key, False)
+                    
+                    # 체크박스 렌더링
+                    is_checked = st.checkbox(f"{med['name']} ({med['cycle']})", key=key)
+                    
+                    # 상태가 False -> True로 바뀌는 순간에만 토스트 발생!
+                    if is_checked and not was_checked:
+                        st.toast(f"{med['name']} 복용 완료! 잘하셨어요 🐾", icon="✅")
+                    
+                    # 현재 상태 저장
+                    st.session_state.checked_state[key] = is_checked
+        
+        st.write("---")
+        # 삭제 버튼 로직... (동일)
+        
+        st.write("---")
+        for idx, med in enumerate(st.session_state.med_list):
+            if st.button(f"삭제: {med['name']}", key=f"del_{idx}"):
+                st.session_state.med_list.pop(idx); st.rerun()
+              
