@@ -1,0 +1,7 @@
+CREATE TABLE album(
+ id INTEGER PRIMARY KEY,
+ pet_name TEXT,
+ photo TEXT,
+ date TEXT,
+ memo TEXT
+);

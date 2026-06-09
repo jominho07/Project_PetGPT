@@ -1,0 +1,5 @@
+name,address,phone,latitude,longitude,individual,memorial,license
+
+부산펫추모공원,부산광역시 기장군...,051-111-1111,35.24,129.21,true,true,허가
+
+해운대펫메모리얼,부산광역시 해운대구...,051-222-2222,35.16,129.16,true,false,허가
