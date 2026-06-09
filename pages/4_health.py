@@ -9,9 +9,6 @@ import auth
 from db import (get_pets, get_schedules, add_schedule, complete_schedule,
                 get_records, add_record, delete_record)
 
-if "completed_schedule_ids" not in st.session_state:
-    st.session_state.completed_schedule_ids = set()
-
 if "selected_calendar_day" not in st.session_state:
     st.session_state.selected_calendar_day = date.today().day
 
@@ -50,7 +47,7 @@ with tab_schedule:
             cycle_days = 0
 
     if st.button("일정 등록", type="primary", key="add_schedule"):
-        add_schedule(sch_pet_id, care_type, schedule_date, cycle_days, schedule_date)
+        add_schedule(sch_pet_id, care_type, date.today(), cycle_days, schedule_date)
         st.rerun()
 
     st.divider()
@@ -100,8 +97,7 @@ with tab_schedule:
         </style>
     """, unsafe_allow_html=True)
 
-    raw_schedules = get_schedules()
-    schedules = [s for s in raw_schedules if s["id"] not in st.session_state.completed_schedule_ids]
+    schedules = get_schedules()
 
     cal = calendar.Calendar(firstweekday=6)
     month_days = cal.monthdayscalendar(today.year, today.month)
@@ -166,9 +162,11 @@ with tab_schedule:
                 cycle_text = f"{s['cycle_days']}일마다 반복" if s.get("cycle_days") else "반복 없음"
                 c1.caption(f"일정일: {s['next_due']} | {cycle_text}")
                 if c2.button("완료", key=f"done_day_{s['id']}", type="primary", use_container_width=True):
-                    st.session_state.completed_schedule_ids.add(s["id"])
                     complete_schedule(s["id"], date.today(), s["cycle_days"])
-                    st.toast(f"'{s['care_type']}' 일정을 완료하여 삭제했습니다! ✨", icon="✅")
+                    if s["cycle_days"]:
+                        st.toast(f"'{s['care_type']}' 완료! 다음 일정으로 갱신했어요 ✨", icon="✅")
+                    else:
+                        st.toast(f"'{s['care_type']}' 일정을 완료 처리했어요 ✨", icon="✅")
                     st.rerun()
 
 # ════════════════════════════════════════════════════════════════════
@@ -196,8 +194,8 @@ with tab_record:
     st.subheader("📋 진료 이력")
     records = get_records()
     if records:
-        df = pd.DataFrame(records)
-        st.download_button("📥 CSV 내보내기", df.to_csv(index=False), "records.csv", "text/csv", key="btn_download_csv")
+        records_df = pd.DataFrame(records)
+        st.download_button("📥 CSV 내보내기", records_df.to_csv(index=False), "records.csv", "text/csv", key="btn_download_csv")
         for r in records:
             with st.expander(f"{r['visit_date']} · {r['pet_name'] or '미지정'} · {r['visit_type']}"):
                 st.write(f"🏥 병원: {r['hospital']} / 🩺 진단: {r['diagnosis']}")

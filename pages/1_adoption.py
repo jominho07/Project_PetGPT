@@ -1,80 +1,56 @@
 import streamlit as st
 import pandas as pd
 import sys, os
-import math
 import folium
 from streamlit_folium import st_folium
-from streamlit_js_eval import get_geolocation
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
 import auth
+from utils import region_selectors, filter_places
+from db import get_favorites, toggle_favorite
 
 auth.login_widget()
 
 st.title("🏠 나에게 꼭 맞는 가족 찾기")
-st.write("간단한 설문을 통해 운명의 반려동물을 추천해 드립니다.")
+st.write("간단한 설문으로 잘 맞는 품종을 추천하고, 내 지역의 입양 가능한 곳을 안내해 드립니다.")
 
 st.divider()
+
+FAV_KIND = "adoption"
 
 # =========================
 # CSV 로드
 # =========================
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 BREEDS_PATH = os.path.join(BASE_DIR, "data", "breeds.csv")
 PETSHOP_PATH = os.path.join(BASE_DIR, "data", "petshop.csv")
 
-df = pd.read_csv(BREEDS_PATH)
-shop_df = pd.read_csv(PETSHOP_PATH)
 
-df["allergy_friendly"] = (
-    df["allergy_friendly"]
-    .astype(str)
-    .str.lower()
-    .eq("true")
-)
+@st.cache_data
+def load_csv(path):
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    df.columns = df.columns.str.strip()
+    return df
 
-# =========================
-# 거리 계산 함수
-# =========================
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
+df = load_csv(BREEDS_PATH)
+shop_df = load_csv(PETSHOP_PATH)
 
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
+df["allergy_friendly"] = df["allergy_friendly"].astype(str).str.lower().eq("true")
 
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(dlon / 2) ** 2
-    )
-
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
 
 # =========================
-# 사용자 입력
+# 사용자 입력 (품종 추천용)
 # =========================
-
 col1, col2 = st.columns(2)
-
 with col1:
-    pet_type = st.selectbox(
-        "선호하는 동물",
-        ["강아지", "고양이", "상관없음"]
-    )
+    pet_type = st.selectbox("선호하는 동물", ["강아지", "고양이", "상관없음"])
+    living_env = st.radio("주거 환경", ["아파트/빌라", "단독주택", "마당 있는 집"])
 
-    living_env = st.radio(
-        "주거 환경",
-        ["아파트/빌라", "단독주택", "마당 있는 집"]
-    )
-
+# 선호 동물이 바뀌면 추천 결과 초기화
 if "last_pet_type" not in st.session_state:
     st.session_state.last_pet_type = pet_type
-
 if st.session_state.last_pet_type != pet_type:
     st.session_state.top3 = None
     st.session_state.selected = None
@@ -82,281 +58,187 @@ if st.session_state.last_pet_type != pet_type:
 
 with col2:
     activity_level = st.select_slider(
-        "활동량",
-        options=["매우 적음", "보통", "활동적", "매우 활동적"]
+        "활동량", options=["매우 적음", "보통", "활동적", "매우 활동적"]
     )
-
     has_allergy = st.checkbox("털 알러지가 있나요?")
 
-# =========================
-# 점수 함수
-# =========================
 
 def score(row):
     s = 0
-
     if pet_type == "상관없음":
         s += 3
     elif row["type"] == pet_type:
         s += 3
-
     if row["energy"] == activity_level:
         s += 3
-
-    if living_env == "아파트/빌라":
-        if row["size"] == "소형":
-            s += 2
-
-    elif living_env == "단독주택":
-        if row["size"] in ["소형", "중형"]:
-            s += 2
-
-    elif living_env == "마당 있는 집":
-        if row["size"] in ["중형", "대형"]:
-            s += 2
-
+    if living_env == "아파트/빌라" and row["size"] == "소형":
+        s += 2
+    elif living_env == "단독주택" and row["size"] in ["소형", "중형"]:
+        s += 2
+    elif living_env == "마당 있는 집" and row["size"] in ["중형", "대형"]:
+        s += 2
     if has_allergy:
-        if row["allergy_friendly"]:
-            s += 3
-        else:
-            s -= 3
-
+        s += 3 if row["allergy_friendly"] else -3
     return s
 
-# =========================
-# session state 초기화
-# =========================
 
 if "top3" not in st.session_state:
     st.session_state.top3 = None
-
 if "selected" not in st.session_state:
     st.session_state.selected = None
+
 
 # =========================
 # 추천 실행
 # =========================
-
-if st.button("추천 리스트 보기", type="primary"):
-
+if st.button("추천 품종 보기", type="primary"):
     result = df.copy()
     result["score"] = result.apply(score, axis=1)
-
     if pet_type == "상관없음":
-
-        dog_top3 = (
-            result[result["type"] == "강아지"]
-            .sort_values("score", ascending=False)
-            .head(3)
-        )
-
-        cat_top3 = (
-            result[result["type"] == "고양이"]
-            .sort_values("score", ascending=False)
-            .head(3)
-        )
-
-        st.session_state.top3 = pd.concat([dog_top3, cat_top3])
-
+        dog = result[result["type"] == "강아지"].sort_values("score", ascending=False).head(3)
+        cat = result[result["type"] == "고양이"].sort_values("score", ascending=False).head(3)
+        st.session_state.top3 = pd.concat([dog, cat])
     else:
-
-        st.session_state.top3 = result.sort_values(
-            "score",
-            ascending=False
-        ).head(3)
-
+        st.session_state.top3 = result.sort_values("score", ascending=False).head(3)
     st.session_state.selected = None
+
 
 # =========================
 # TOP3 출력
 # =========================
+def breed_cards(rows, emoji, key_prefix):
+    cols = st.columns(len(rows)) if len(rows) > 0 else []
+    for col, (_, row) in zip(cols, rows.iterrows()):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"### {emoji} {row['breed']}")
+                st.write(f"📏 크기: {row['size']}")
+                if st.button("상세 보기", key=f"{key_prefix}_{row['breed']}"):
+                    st.session_state.selected = row
+
 
 if st.session_state.top3 is not None:
-
     if pet_type == "상관없음":
-
-        dog_top3 = st.session_state.top3[
-            st.session_state.top3["type"] == "강아지"
-        ]
-
-        cat_top3 = st.session_state.top3[
-            st.session_state.top3["type"] == "고양이"
-        ]
-
+        dog = st.session_state.top3[st.session_state.top3["type"] == "강아지"]
+        cat = st.session_state.top3[st.session_state.top3["type"] == "고양이"]
         st.success("🏆 강아지 TOP 3")
-
-        cols = st.columns(3)
-
-        for col, (_, row) in zip(cols, dog_top3.iterrows()):
-
-            with col:
-                with st.container(border=True):
-
-                    st.markdown(f"### 🐶 {row['breed']}")
-                    st.write(f"📏 크기: {row['size']}")
-
-                    if st.button("상세 보기", key=f"dog_{row['breed']}"):
-                        st.session_state.selected = row
-
+        breed_cards(dog, "🐶", "dog")
         st.success("🏆 고양이 TOP 3")
-
-        cols = st.columns(3)
-
-        for col, (_, row) in zip(cols, cat_top3.iterrows()):
-
-            with col:
-                with st.container(border=True):
-
-                    st.markdown(f"### 😺 {row['breed']}")
-                    st.write(f"📏 크기: {row['size']}")
-
-                    if st.button("상세 보기", key=f"cat_{row['breed']}"):
-                        st.session_state.selected = row
-
+        breed_cards(cat, "😺", "cat")
     else:
-
         st.success("🏆 추천 TOP 3")
+        emoji = "🐶" if pet_type == "강아지" else "😺"
+        breed_cards(st.session_state.top3, emoji, "pick")
 
-        cols = st.columns(3)
-
-        for col, (_, row) in zip(cols, st.session_state.top3.iterrows()):
-
-            with col:
-                with st.container(border=True):
-
-                    emoji = "🐶" if row["type"] == "강아지" else "😺"
-
-                    st.markdown(f"### {emoji} {row['breed']}")
-                    st.write(f"📏 크기: {row['size']}")
-
-                    if st.button("상세 보기", key=row["breed"]):
-                        st.session_state.selected = row
 
 # =========================
-# 상세 정보 + 위치 기반 입양처
+# 상세 정보
 # =========================
-
 if st.session_state.selected is not None:
-
     pet = st.session_state.selected
-
     st.divider()
     st.subheader(f"📌 {pet['breed']} 상세 정보")
-
     st.write(f"🏥 대표 질환: {pet['main_disease']}")
     st.write(f"💰 양육비(월): {pet['cost']}")
     st.write(f"⚡ 활동량: {pet['energy']}")
     st.write(f"🧬 털 빠짐: {pet['shedding']}")
-
     if pet["allergy_friendly"]:
         st.success("알러지 친화 품종")
-
-    st.divider()
-    st.subheader("🗺 내 위치 기반 입양 가능 장소")
-
-    location = get_geolocation()
-
-    if location is None:
-        st.warning("📍 브라우저에서 위치 권한을 허용해주세요.")
-
-    else:
-        user_lat = location["coords"]["latitude"]
-        user_lon = location["coords"]["longitude"]
-
-        st.success(f"현재 위치: {user_lat:.4f}, {user_lon:.4f}")
-
-        selected_type = pet["type"]
-        selected_breed = pet["breed"]
-
-        filtered_shop = shop_df[
-            (shop_df["animal_type"] == selected_type) &
-            (
-                shop_df["breed"]
-                .astype(str)
-                .str.contains(selected_breed, na=False)
-            )
-        ].copy()
-
-        if filtered_shop.empty:
-            st.warning(f"현재 {selected_breed} 입양 가능 장소가 없습니다.")
-
-        else:
-            filtered_shop["distance"] = filtered_shop.apply(
-                lambda r: haversine(
-                    user_lat,
-                    user_lon,
-                    r["lat"],
-                    r["lon"]
-                ),
-                axis=1
-            )
-
-            filtered_shop = filtered_shop.sort_values("distance")
-
-            nearest = filtered_shop.iloc[0]
-
-            st.success(
-                f"가장 가까운 추천 입양처는 "
-                f"**{nearest['name']}** 입니다. "
-                f"거리: {nearest['distance']:.2f}km"
-            )
-
-            radius = st.slider("검색 반경 km", 1, 30, 10)
-
-            nearby = filtered_shop[
-                filtered_shop["distance"] <= radius
-            ].sort_values("distance")
-
-            m = folium.Map(
-                location=[user_lat, user_lon],
-                zoom_start=12
-            )
-
-            folium.Marker(
-                [user_lat, user_lon],
-                popup="내 위치",
-                tooltip="내 위치",
-                icon=folium.Icon(color="blue", icon="user")
-            ).add_to(m)
-
-            for _, r in nearby.iterrows():
-
-                marker_color = (
-                    "red"
-                    if r["name"] == nearest["name"]
-                    else "green"
-                )
-
-                folium.Marker(
-                    [r["lat"], r["lon"]],
-                    popup=f"""
-                    <b>{r['name']}</b><br>
-                    동물: {r['animal_type']}<br>
-                    입양 가능 품종: {r['breed']}<br>
-                    거리: {r['distance']:.2f}km
-                    """,
-                    tooltip=r["name"],
-                    icon=folium.Icon(
-                        color=marker_color,
-                        icon="home"
-                    )
-                ).add_to(m)
-
-            st_folium(m, width=700, height=500)
-
-            st.subheader("📌 가까운 입양처 목록")
-
-            if nearby.empty:
-                st.warning("검색 반경 안에 입양처가 없습니다.")
-            else:
-                for _, r in nearby.iterrows():
-                    st.write(f"""
-                    🏠 **{r['name']}**
-                    - 동물: {r['animal_type']}
-                    - 입양 가능 품종: {r['breed']}
-                    - 거리: {r['distance']:.2f}km
-                    """)
-
-    if st.button("닫기"):
+    if st.button("상세 닫기"):
         st.session_state.selected = None
         st.rerun()
+
+
+# =========================
+# 위치 기반 입양처 찾기 (시군구 선택 방식)
+# =========================
+st.divider()
+st.subheader("🗺 내 지역 입양 가능한 곳 찾기")
+st.caption("지역을 선택하면 그 지역의 입양 가능한 보호소·센터를 모두 보여드립니다.")
+
+sido, sigungu, dong = region_selectors(shop_df, key_prefix="adopt")
+filtered = filter_places(shop_df, sido, sigungu, dong)
+
+st.write(f"**📍 검색 결과: {len(filtered)}곳**")
+
+
+def build_popup_html(row):
+    tel = ""  # petshop.csv 에 전화번호가 없으면 생략
+    map_link = f"https://map.kakao.com/link/to/{row['name']},{row['lat']},{row['lon']}"
+    return f"""
+    <div style="font-family:-apple-system,sans-serif; width:220px;">
+        <div style="font-size:15px; font-weight:700; margin-bottom:2px;">{row['name']}</div>
+        <div style="font-size:12px; color:#888; margin-bottom:6px;">
+            {row['시군구']} {row['동']} · {row['animal_type']}
+        </div>
+        <div style="font-size:13px; margin-bottom:8px;">🐾 입양 가능: {row['breed']}</div>
+        <a href="{map_link}" target="_blank"
+           style="display:inline-block; padding:5px 10px; background:#2196F3;
+                  color:#fff; text-decoration:none; border-radius:5px; font-size:13px;">
+           🧭 길찾기</a>
+    </div>
+    """
+
+
+def adopt_card(row, favs):
+    name = row["name"]
+    is_fav = name in favs
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([5, 2, 1])
+        with c1:
+            st.write(f"🏠 **{name}**  ·  {row['animal_type']}")
+            st.caption(f"📍 {row['시군구']} {row['동']}  ·  🐾 {row['breed']}")
+        with c2:
+            map_link = f"https://map.kakao.com/link/to/{name},{row['lat']},{row['lon']}"
+            st.markdown(
+                f"<a href='{map_link}' target='_blank' "
+                f"style='text-decoration:none;'>🧭 길찾기</a>",
+                unsafe_allow_html=True,
+            )
+        with c3:
+            label = "⭐" if is_fav else "☆"
+            if st.button(label, key=f"fav_{FAV_KIND}_{name}", help="즐겨찾기"):
+                added = toggle_favorite(FAV_KIND, name)
+                if added:
+                    st.toast(f"⭐ '{name}'을(를) 즐겨찾기에 추가했어요.")
+                else:
+                    st.toast(f"☆ '{name}'을(를) 즐겨찾기에서 뺐어요.")
+                st.rerun()
+
+
+if filtered.empty:
+    st.info("선택한 지역에 등록된 입양처가 없어요. 다른 지역이나 '전체'로 검색해 보세요.")
+else:
+    favs = get_favorites(FAV_KIND)
+
+    # 즐겨찾기 섹션
+    fav_df = filtered[filtered["name"].isin(favs)]
+    if not fav_df.empty:
+        st.markdown("##### ⭐ 이 지역의 즐겨찾기")
+        for _, row in fav_df.iterrows():
+            adopt_card(row, favs)
+        st.divider()
+
+    # 지도
+    avg_lat = filtered["lat"].mean()
+    avg_lon = filtered["lon"].mean()
+    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=12, control_scale=True)
+    for _, row in filtered.iterrows():
+        folium.Marker(
+            [row["lat"], row["lon"]],
+            popup=folium.Popup(build_popup_html(row), max_width=260),
+            tooltip=row["name"],
+            icon=folium.Icon(color="orange", icon="home", prefix="fa"),
+        ).add_to(m)
+    if len(filtered) > 1:
+        bounds = [
+            [filtered["lat"].min(), filtered["lon"].min()],
+            [filtered["lat"].max(), filtered["lon"].max()],
+        ]
+        m.fit_bounds(bounds, padding=(30, 30))
+    st_folium(m, use_container_width=True, height=500, returned_objects=[])
+
+    # 목록
+    st.markdown("##### 📋 입양처 목록  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+    for _, row in filtered.iterrows():
+        adopt_card(row, favs)
