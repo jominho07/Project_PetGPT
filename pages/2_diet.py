@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sys, os
+import base64
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth
@@ -176,6 +177,27 @@ feed_df = pd.DataFrame(FEED_DATA)
 feed_df["100g당 가격"] = feed_df["가격"] / 20
 
 # =========================
+# 프로필 사진 함수
+# =========================
+
+def image_to_base64(uploaded_file):
+    if uploaded_file is None:
+        return None
+
+    bytes_data = uploaded_file.getvalue()
+    return base64.b64encode(bytes_data).decode()
+
+
+def show_profile_image(image_data, width=120):
+    if image_data:
+        st.image(
+            f"data:image/png;base64,{image_data}",
+            width=width
+        )
+    else:
+        st.info("등록된 사진 없음")
+
+# =========================
 # 계산 함수
 # =========================
 
@@ -206,7 +228,6 @@ def get_body_message(body_status):
 
 def disease_to_issues(disease):
     disease = str(disease)
-
     issues = []
 
     if any(word in disease for word in ["슬개골", "관절", "고관절", "디스크", "척추"]):
@@ -268,6 +289,15 @@ st.subheader("🐾 반려동물 프로필 등록")
 
 with st.container(border=True):
     name = st.text_input("반려동물 이름", placeholder="예: 멍멍이")
+
+    profile_image = st.file_uploader(
+        "프로필 사진",
+        type=["png", "jpg", "jpeg"],
+        key="profile_image"
+    )
+
+    if profile_image:
+        st.image(profile_image, caption="프로필 사진 미리보기", width=150)
 
     col1, col2 = st.columns(2)
 
@@ -345,13 +375,14 @@ if st.button("맞춤 식단 분석하기", type="primary"):
 
         grams = mer / 3500 * 1000
 
-        feed_result, disease_issues, all_issues = recommend_feeds(
+        _, disease_issues, all_issues = recommend_feeds(
             species,
             user_issues,
             breed_info
         )
 
         result = {
+            "프로필 사진": image_to_base64(profile_image),
             "이름": name,
             "종류": species,
             "품종": selected_breed,
@@ -395,6 +426,7 @@ if st.session_state.diet_results:
 
     st.divider()
     st.subheader(f"📊 {latest['이름']} 맞춤 영양 결과")
+    show_profile_image(latest.get("프로필 사진"), width=160)
 
     st.caption(
         f"{latest['종류']} · {latest['품종']} · "
@@ -522,8 +554,13 @@ if st.session_state.diet_results:
 
     result_df = pd.DataFrame(st.session_state.diet_results)
 
+    display_df = result_df.drop(
+        columns=["프로필 사진"],
+        errors="ignore"
+    )
+
     st.dataframe(
-        result_df,
+        display_df,
         use_container_width=True,
         hide_index=True
     )
@@ -541,8 +578,23 @@ if st.session_state.diet_results:
     selected_index = profile_names.index(selected_profile)
     selected_pet = st.session_state.diet_results[selected_index]
 
+    show_profile_image(selected_pet.get("프로필 사진"), width=140)
+
     with st.container(border=True):
         st.markdown(f"### ✏️ {selected_pet['이름']} 프로필 수정")
+
+        edit_profile_image = st.file_uploader(
+            "프로필 사진 변경",
+            type=["png", "jpg", "jpeg"],
+            key="edit_profile_image"
+        )
+
+        if edit_profile_image:
+            st.image(
+                edit_profile_image,
+                caption="새 프로필 사진",
+                width=150
+            )
 
         edit_name = st.text_input(
             "이름 수정",
@@ -670,6 +722,11 @@ if st.session_state.diet_results:
                 )
 
                 st.session_state.diet_results[selected_index] = {
+                    "프로필 사진": (
+                        image_to_base64(edit_profile_image)
+                        if edit_profile_image
+                        else selected_pet.get("프로필 사진")
+                    ),
                     "이름": edit_name,
                     "종류": edit_species,
                     "품종": edit_breed,
