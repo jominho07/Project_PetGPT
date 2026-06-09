@@ -81,6 +81,16 @@ CREATE TABLE IF NOT EXISTS records (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (pet_id)  REFERENCES pets(id)  ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS favorites (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    kind        TEXT NOT NULL,               -- 'store'(용품/미용점) | 'facility'(장례식장)
+    place_name  TEXT NOT NULL,               -- CSV 의 가게명/시설명으로 식별
+    created_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (user_id, kind, place_name)       -- 같은 곳 중복 찜 방지
+);
 """
 
 
@@ -264,6 +274,63 @@ def delete_record(record_id):
             "DELETE FROM records WHERE id=? AND user_id=?",
             (record_id, current_user_id()),
         )
+
+
+# ── favorites (즐겨찾기) ────────────────────────────────────────────
+def get_favorites(kind):
+    """현재 사용자가 즐겨찾기한 장소 '이름' 집합을 반환.
+
+    kind: 'store' 또는 'facility'
+    집합(set)으로 주므로, 페이지에서 `name in favs` 로 빠르게 찜 여부 판단 가능.
+    """
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT place_name FROM favorites WHERE user_id=? AND kind=?",
+            (current_user_id(), kind),
+        ).fetchall()
+    return {r["place_name"] for r in rows}
+
+
+def is_favorite(kind, place_name):
+    """특정 장소가 즐겨찾기 되어 있는지 여부."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM favorites WHERE user_id=? AND kind=? AND place_name=?",
+            (current_user_id(), kind, place_name),
+        ).fetchone()
+    return row is not None
+
+
+def add_favorite(kind, place_name):
+    """즐겨찾기 추가. 이미 있으면 UNIQUE 제약으로 조용히 무시."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO favorites (user_id, kind, place_name)
+               VALUES (?, ?, ?)""",
+            (current_user_id(), kind, place_name),
+        )
+
+
+def remove_favorite(kind, place_name):
+    """즐겨찾기 삭제."""
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM favorites WHERE user_id=? AND kind=? AND place_name=?",
+            (current_user_id(), kind, place_name),
+        )
+
+
+def toggle_favorite(kind, place_name):
+    """찜 상태를 뒤집고, 결과가 '추가됨'이면 True, '삭제됨'이면 False 반환.
+
+    페이지에서 이 반환값으로 토스트 메시지를 고를 수 있다.
+    """
+    if is_favorite(kind, place_name):
+        remove_favorite(kind, place_name)
+        return False
+    else:
+        add_favorite(kind, place_name)
+        return True
 
 
 # ── 모듈 import 시 자동 초기화 ─────────────────────────────────────
