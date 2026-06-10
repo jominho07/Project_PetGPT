@@ -70,7 +70,11 @@ with c6:
 st.divider()
 
 # ── 내 반려동물 (본문에 크게 표시) ─────────────────────────────────
-st.markdown("### 🐶 내 반려동물")
+hc1, hc2 = st.columns([3, 2])
+with hc1:
+    st.markdown("### 🐶 내 반려동물")
+with hc2:
+    st.page_link("pages/2_diet.py", label="➕ 반려동물 등록·수정하러 가기")
 
 pets = get_pets()
 if pets:
@@ -95,7 +99,8 @@ if pets:
                             st.rerun()
     st.caption("ℹ️ 정보를 수정하려면 '🥗 맞춤 식단' 페이지에서 같은 이름으로 다시 등록하면 갱신돼요.")
 else:
-    st.info("아직 등록된 반려동물이 없어요. '🥗 맞춤 식단' 페이지에서 등록해 보세요.")
+    st.info("아직 등록된 반려동물이 없어요. 위의 **➕ 반려동물 등록·수정하러 가기**를 "
+            "누르거나 '🥗 맞춤 식단' 페이지에서 등록해 보세요.")
 
 # ── 사이드바 (로그인 + 내 반려동물은 auth.login_widget 이 처리) ─────
 auth.login_widget()

@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date
+from datetime import date, timedelta
 import sys, os
 import pandas as pd
 import calendar
@@ -20,6 +20,12 @@ st.write("반복 일정부터 병원 진료 내용까지, 우리 아이의 건�
 
 pets = get_pets()
 pet_options = {p["name"]: p["id"] for p in pets}
+
+# 반려동물이 없으면 등록 페이지로 안내 (첫 사용자 동선)
+if not pets:
+    st.info("아직 등록된 반려동물이 없어요. 먼저 반려동물을 등록하면 "
+            "일정·진료·투약을 그 아이와 연결해 관리할 수 있어요.")
+    st.page_link("pages/2_diet.py", label="➕ 맞춤 식단 페이지에서 반려동물 등록하기")
 
 tab_schedule, tab_record, tab_medication = st.tabs(["📅 케어 일정", "🏥 진료 기록", "💊 투약 관리"])
 
@@ -119,7 +125,7 @@ with tab_schedule:
                 if s_date.day not in schedule_map:
                     schedule_map[s_date.day] = []
                 schedule_map[s_date.day].append(s)
-        except Exception:
+        except:
             pass
 
     for week in month_days:
