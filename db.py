@@ -522,6 +522,61 @@ def add_comment(post_id, content):
             (post_id, current_user_id(), content)
         )
 
+
+def delete_post(post_id):
+    """게시글 삭제. 본인(user_id 일치)이 쓴 글만 지워진다.
+
+    삭제 성공 시 True, 권한 없음/없는 글이면 False.
+    댓글은 FK ON DELETE CASCADE 로 함께 삭제된다.
+    """
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM posts WHERE id=? AND user_id=?",
+            (post_id, current_user_id()),
+        )
+        return cur.rowcount > 0
+
+
+def delete_comment(comment_id):
+    """댓글 삭제. 본인이 쓴 댓글만 지워진다."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM comments WHERE id=? AND user_id=?",
+            (comment_id, current_user_id()),
+        )
+        return cur.rowcount > 0
+
+
+def get_upcoming_schedules(days_ahead=30):
+    """현재 사용자의 다가오는 케어 일정을 가까운 순으로 반환.
+
+    오늘부터 days_ahead 일 이내의 일정만. 홈 대시보드용.
+    각 항목에 'd_day'(남은 일수)를 계산해 넣는다.
+    """
+    from datetime import date, timedelta
+    today = date.today()
+    limit = today + timedelta(days=days_ahead)
+    result = []
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT s.*, p.name AS pet_name
+               FROM schedules s
+               LEFT JOIN pets p ON s.pet_id = p.id
+               WHERE s.user_id=?
+               ORDER BY s.next_due""",
+            (current_user_id(),),
+        ).fetchall()
+    for r in rows:
+        d = dict(r)
+        try:
+            due = date.fromisoformat(d["next_due"])
+        except (ValueError, TypeError):
+            continue
+        if today <= due <= limit:
+            d["d_day"] = (due - today).days
+            result.append(d)
+    return result
+
 # ── 모듈 import 시 자동 초기화 ─────────────────────────────────────
 # 어떤 페이지로 직접 진입하든(예: /health) 테이블이 보장되도록,
 # db.py 가 처음 import 되는 시점에 한 번 init_db() 를 호출한다.

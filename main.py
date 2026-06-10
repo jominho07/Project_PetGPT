@@ -1,5 +1,5 @@
 import streamlit as st
-from db import get_pets
+from db import get_pets, delete_pet, get_upcoming_schedules
 import auth
 
 st.set_page_config(
@@ -13,6 +13,28 @@ st.subheader("입양부터 마지막 순간까지, Pet-GPT가 함께합니다.")
 st.info("아래 서비스 카드를 누르거나 왼쪽 사이드바 메뉴에서 원하는 서비스를 선택하세요.")
 
 st.divider()
+
+# ── 로그인 사용자: 다가오는 케어 일정 D-day ────────────────────────
+if auth.is_logged_in():
+    upcoming = get_upcoming_schedules(days_ahead=30)
+    if upcoming:
+        st.markdown("### ⏰ 다가오는 케어 일정")
+        # 최대 4개까지 카드로
+        show = upcoming[:4]
+        cols = st.columns(len(show))
+        for col, s in zip(cols, show):
+            with col:
+                with st.container(border=True):
+                    d = s["d_day"]
+                    if d == 0:
+                        dday = "🔴 D-DAY"
+                    else:
+                        dday = f"D-{d}"
+                    pet_name = (s.get("pet_name") or "").strip() or "우리 아이"
+                    st.markdown(f"#### {dday}")
+                    st.write(f"🐾 {pet_name}")
+                    st.caption(f"{s['care_type']} · {s['next_due']}")
+        st.divider()
 
 # ── 서비스 한눈에 보기 (카드를 누르면 해당 페이지로 이동) ───────────
 st.markdown("### 제공 서비스")
@@ -65,6 +87,13 @@ if pets:
                     st.write(f"나이: {p['age']}세  ·  몸무게: {p['weight']}kg")
                     neutered = "✅ 완료" if p.get("neutered") else "❌ 안 함"
                     st.caption(f"중성화: {neutered}")
+                    # 로그인한 사용자만 삭제 가능
+                    if auth.is_logged_in():
+                        if st.button("🗑️ 삭제", key=f"del_pet_{p['id']}"):
+                            delete_pet(p["id"])
+                            st.toast(f"'{p['name']}' 정보를 삭제했어요.")
+                            st.rerun()
+    st.caption("ℹ️ 정보를 수정하려면 '🥗 맞춤 식단' 페이지에서 같은 이름으로 다시 등록하면 갱신돼요.")
 else:
     st.info("아직 등록된 반려동물이 없어요. '🥗 맞춤 식단' 페이지에서 등록해 보세요.")
 

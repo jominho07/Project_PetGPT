@@ -44,24 +44,40 @@ posts = db.get_posts()
 if not posts:
     st.info("아직 등록된 게시글이 없습니다. 첫 글의 주인공이 되어보세요!")
 else:
+    my_id = db.current_user_id()
     for post in posts:
         # 익명 사용자의 경우 이름을 '익명(게스트)'로 고정
         display_name = "익명(게스트)" if post['auth_kind'] == 'guest' else post['author_name']
-        
+
         # 각 글을 Expander(접기/펼치기) 뷰로 생성
         with st.expander(f"{post['title']} | 👤 {display_name} | 🕒 {post['created_at'][:16]}"):
             st.markdown(post['content'])
+
+            # ─ 본인 글이면 삭제 버튼 ─
+            if post['user_id'] == my_id:
+                if st.button("🗑️ 글 삭제", key=f"del_post_{post['id']}"):
+                    db.delete_post(post['id'])
+                    st.toast("게시글을 삭제했어요.")
+                    st.rerun()
+
             st.divider()
-            
+
             # ─ 댓글 영역 ─
             comments = db.get_comments(post['id'])
             if comments:
                 for c in comments:
                     c_name = "익명(게스트)" if c['auth_kind'] == 'guest' else c['author_name']
-                    st.caption(f"**{c_name}**: {c['content']} ({c['created_at'][:16]})")
+                    cc1, cc2 = st.columns([6, 1])
+                    cc1.caption(f"**{c_name}**: {c['content']} ({c['created_at'][:16]})")
+                    # 본인 댓글이면 삭제 버튼
+                    if c['user_id'] == my_id:
+                        if cc2.button("삭제", key=f"del_comment_{c['id']}"):
+                            db.delete_comment(c['id'])
+                            st.toast("댓글을 삭제했어요.")
+                            st.rerun()
             else:
                 st.caption("등록된 댓글이 없습니다.")
-            
+
             # ─ 새 댓글 작성 폼 ─
             # Streamlit의 form 충돌을 막기 위해 post['id']를 key로 활용
             with st.form(key=f"comment_form_{post['id']}", clear_on_submit=True):
@@ -70,7 +86,7 @@ else:
                     comment_text = st.text_input("댓글 쓰기", label_visibility="collapsed", placeholder="댓글을 남겨보세요")
                 with c_col2:
                     comment_submitted = st.form_submit_button("등록")
-                
+
                 if comment_submitted:
                     if comment_text.strip():
                         db.add_comment(post['id'], comment_text)
