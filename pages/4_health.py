@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date
 import sys, os
 import pandas as pd
 import calendar
@@ -119,7 +119,7 @@ with tab_schedule:
                 if s_date.day not in schedule_map:
                     schedule_map[s_date.day] = []
                 schedule_map[s_date.day].append(s)
-        except:
+        except Exception:
             pass
 
     for week in month_days:

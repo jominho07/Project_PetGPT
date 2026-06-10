@@ -43,9 +43,11 @@ def logout() -> None:
 
 
 def login_widget() -> None:
-    """사이드바에 로그인/로그아웃 UI 를 그린다.
+    """사이드바에 로그인/로그아웃 UI 와 내 반려동물 목록을 그린다.
 
     어디서 호출해도 사이드바에 표시되도록 `with st.sidebar:` 를 내부에서 잡는다.
+    모든 페이지가 이 함수를 호출하므로, 반려동물 목록도 여기 두면
+    전 페이지 사이드바에 일관되게 나타난다.
     """
     with st.sidebar:
         st.markdown("### 👤 사용자")
@@ -66,3 +68,16 @@ def login_widget() -> None:
                     st.warning("닉네임을 입력해 주세요.")
             st.caption("⚠️ 현재는 테스트용 임시 로그인입니다. "
                        "비밀번호 없이 닉네임만으로 구분됩니다.")
+
+        # ── 내 반려동물 목록 (모든 페이지 공통) ──────────────────
+        st.divider()
+        st.markdown("### 🐶 내 반려동물")
+        # db import 는 함수 안에서 (순환 import 방지)
+        from db import get_pets
+        pets = get_pets()
+        if pets:
+            for p in pets:
+                st.write(f"- **{p['name']}** ({p['age']}세 / {p['weight']}kg)")
+        else:
+            st.caption("아직 등록된 반려동물이 없어요.\n"
+                       "'맞춤 식단' 페이지에서 등록해 보세요.")

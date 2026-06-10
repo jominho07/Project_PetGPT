@@ -1,8 +1,11 @@
 import streamlit as st
-import db
+import sys, os
 
-# 페이지 기본 설정
-st.set_page_config(page_title="반려인 소통 게시판", page_icon="💬")
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import db
+import auth
+
+auth.login_widget()
 
 st.title("💬 소통 게시판")
 st.markdown("반려동물을 키우면서 얻은 꿀팁이나 고민을 공유해보세요!")
