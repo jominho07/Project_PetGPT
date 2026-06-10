@@ -242,6 +242,10 @@ else:
     st_folium(m, use_container_width=True, height=500, returned_objects=[])
 
     # 목록
-    st.markdown("##### 📋 입양처 목록  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+    if auth.is_logged_in():
+        st.markdown("##### 📋 입양처 목록  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+    else:
+        st.markdown("##### 📋 입양처 목록")
+        st.caption("로그인하면 ⭐ 즐겨찾기에 추가할 수 있어요.")
     for _, row in filtered.iterrows():
         adopt_card(row, favs)

@@ -168,7 +168,11 @@ else:
 
         # 목록 (별표로 즐겨찾기 토글)
         st.divider()
-        st.write("📋 **가게 목록**  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+        if auth.is_logged_in():
+            st.write("📋 **가게 목록**  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+        else:
+            st.write("📋 **가게 목록**")
+            st.caption("로그인하면 ⭐ 즐겨찾기에 추가할 수 있어요.")
         for _, row in filtered.iterrows():
             store_card(row, favs)
     else:

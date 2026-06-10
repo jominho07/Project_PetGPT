@@ -4,6 +4,7 @@
 나중에 카카오 로그인을 붙일 때는 current_user_id() 만 바꿔주면 된다.
 """
 import os
+import json
 import sqlite3
 from datetime import date, datetime
 
@@ -104,6 +105,18 @@ CREATE TABLE IF NOT EXISTS album_memories (
     user_id     INTEGER NOT NULL,
     memory_date TEXT NOT NULL,                -- 추억 날짜 (ISO)
     memo        TEXT,                          -- 추억 메모
+    created_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS medications (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    name        TEXT NOT NULL,                -- 약 이름
+    cycle       TEXT NOT NULL,                -- '매일' | '매주' | '매월' | '매년'
+    opt_json    TEXT,                          -- 주기별 옵션을 JSON 문자열로 저장
+    start_date  TEXT NOT NULL,                -- 등록일
+    end_date    TEXT NOT NULL,                -- 반복 종료일
     created_at  TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -406,6 +419,47 @@ def delete_memory(memory_id):
         conn.execute(
             "DELETE FROM album_memories WHERE id=? AND user_id=?",
             (memory_id, current_user_id()),
+        )
+
+
+# ── medications (투약 관리) ────────────────────────────────────────
+def get_medications():
+    """현재 사용자의 투약 목록을 반환. opt 는 JSON 에서 파싱해 돌려준다."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM medications WHERE user_id=? ORDER BY created_at",
+            (current_user_id(),),
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        # opt_json 을 파이썬 객체로 복원 (없으면 None)
+        try:
+            d["opt"] = json.loads(d["opt_json"]) if d["opt_json"] else None
+        except (json.JSONDecodeError, TypeError):
+            d["opt"] = None
+        result.append(d)
+    return result
+
+
+def add_medication(name, cycle, opt, start_date, end_date):
+    """투약 추가. opt(리스트/딕셔너리/숫자/None)는 JSON 문자열로 저장."""
+    opt_json = json.dumps(opt, ensure_ascii=False) if opt is not None else None
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO medications
+               (user_id, name, cycle, opt_json, start_date, end_date)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (current_user_id(), name, cycle, opt_json,
+             _to_iso(start_date), _to_iso(end_date)),
+        )
+
+
+def delete_medication(med_id):
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM medications WHERE id=? AND user_id=?",
+            (med_id, current_user_id()),
         )
 
 

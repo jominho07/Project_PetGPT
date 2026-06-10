@@ -7,7 +7,8 @@ import calendar
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth
 from db import (get_pets, get_schedules, add_schedule, complete_schedule,
-                get_records, add_record, delete_record)
+                get_records, add_record, delete_record,
+                get_medications, add_medication, delete_medication)
 
 if "selected_calendar_day" not in st.session_state:
     st.session_state.selected_calendar_day = date.today().day
@@ -226,51 +227,73 @@ with tab_medication:
 
     if st.button("추가하기", type="primary", key="btn_add_med"):
         if med_name:
-            if "med_list" not in st.session_state:
-                st.session_state.med_list = []
-            st.session_state.med_list.append({
-                "name": med_name, "cycle": cycle, "opt": sub_option, "end": end_date, "start": date.today()
-            })
+            add_medication(med_name, cycle, sub_option, date.today(), end_date)
+            st.toast(f"'{med_name}' 투약 일정을 등록했어요 💊", icon="✅")
             st.rerun()
+        else:
+            st.warning("약 이름을 입력해 주세요.")
 
     st.markdown("### ✅ 오늘 먹어야 할 약")
 
+    # "오늘 체크했는지" 는 그날 한정 임시 정보라 session_state 로 둔다.
+    # (약 데이터 자체는 DB 에 저장되므로 새로고침해도 안 사라짐)
     if "checked_state" not in st.session_state:
         st.session_state.checked_state = {}
     if "last_date" not in st.session_state or st.session_state.last_date != today:
         st.session_state.checked_state = {}
         st.session_state.last_date = today
 
-    if "med_list" in st.session_state and st.session_state.med_list:
-        for idx, med in enumerate(st.session_state.med_list):
-            if med["end"] >= today:
-                opt = med.get("opt")
-                should_take = False
+    meds = get_medications()
+    if meds:
+        for med in meds:
+            # 종료일 비교 (DB 에는 ISO 문자열로 저장됨)
+            try:
+                med_end = date.fromisoformat(med["end_date"])
+            except (ValueError, TypeError):
+                continue
+            if med_end < today:
+                continue
 
-                if med["cycle"] == "매일":
-                    should_take = True
-                elif med["cycle"] == "매주" and opt:
-                    curr_day = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
-                    should_take = curr_day in opt
-                elif med["cycle"] == "매월" and opt:
-                    should_take = (today.day == opt)
-                elif med["cycle"] == "매년" and opt:
-                    if isinstance(opt, dict):
-                        should_take = (today.month == opt.get("month") and today.day == opt.get("day"))
+            opt = med.get("opt")
+            should_take = False
+            if med["cycle"] == "매일":
+                should_take = True
+            elif med["cycle"] == "매주" and opt:
+                curr_day = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
+                should_take = curr_day in opt
+            elif med["cycle"] == "매월" and opt:
+                should_take = (today.day == int(opt))
+            elif med["cycle"] == "매년" and opt:
+                if isinstance(opt, dict):
+                    should_take = (today.month == opt.get("month") and today.day == opt.get("day"))
 
-                if should_take:
-                    key = f"check_{idx}"
-                    was_checked = st.session_state.checked_state.get(key, False)
-                    is_checked = st.checkbox(f"{med['name']} ({med['cycle']})", key=key)
-
-                    if is_checked and not was_checked:
-                        st.toast(f"{med['name']} 복용 완료! 잘하셨어요 🐾", icon="✅")
-                    st.session_state.checked_state[key] = is_checked
+            if should_take:
+                key = f"check_{med['id']}"
+                was_checked = st.session_state.checked_state.get(key, False)
+                is_checked = st.checkbox(f"{med['name']} ({med['cycle']})", key=key)
+                if is_checked and not was_checked:
+                    st.toast(f"{med['name']} 복용 완료! 잘하셨어요 🐾", icon="✅")
+                st.session_state.checked_state[key] = is_checked
 
         st.write("---")
-        for idx, med in enumerate(st.session_state.med_list):
-            if st.button(f"삭제: {med['name']}", key=f"del_{idx}"):
-                st.session_state.med_list.pop(idx)
-                st.rerun()
+        st.markdown("#### 📋 등록된 투약 목록")
+        for med in meds:
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1])
+                # 주기 설명 문구
+                if med["cycle"] == "매주" and med.get("opt"):
+                    detail = f"매주 {', '.join(med['opt'])}요일"
+                elif med["cycle"] == "매월" and med.get("opt"):
+                    detail = f"매월 {med['opt']}일"
+                elif med["cycle"] == "매년" and isinstance(med.get("opt"), dict):
+                    detail = f"매년 {med['opt'].get('month')}월 {med['opt'].get('day')}일"
+                else:
+                    detail = med["cycle"]
+                c1.write(f"💊 **{med['name']}**")
+                c1.caption(f"{detail}  ·  종료일: {med['end_date']}")
+                if c2.button("삭제", key=f"del_med_{med['id']}"):
+                    delete_medication(med["id"])
+                    st.toast(f"'{med['name']}' 투약을 삭제했어요.")
+                    st.rerun()
     else:
         st.caption("등록된 약이 없습니다.")
