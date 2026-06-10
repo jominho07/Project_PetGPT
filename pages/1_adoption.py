@@ -1,416 +1,247 @@
-"""SQLite 데이터 접근 계층.
-
-페이지들은 이 모듈의 함수만 호출하면 되고, SQL 을 직접 다루지 않는다.
-나중에 카카오 로그인을 붙일 때는 current_user_id() 만 바꿔주면 된다.
-"""
-import os
-import sqlite3
-from datetime import date, datetime
-
 import streamlit as st
+import pandas as pd
+import sys, os
+import folium
+from streamlit_folium import st_folium
 
-# ── DB 파일 위치 ────────────────────────────────────────────────────
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(_BASE_DIR, "data", "petgpt.db")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 
+import auth
+from utils import region_selectors, filter_places
+from db import get_favorites, toggle_favorite
 
-# ── 연결 ───────────────────────────────────────────────────────────
-def get_conn():
-    """Streamlit 의 멀티스레드 환경에서 안전하게 동작하도록 옵션을 준다."""
-    # data/ 폴더가 없으면 먼저 만든다.
-    # (Streamlit Cloud 등 폴더가 보장되지 않는 환경 대비 안전 장치)
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+auth.login_widget()
 
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    # 결과를 dict 처럼 row["name"] 으로 꺼낼 수 있게
-    conn.row_factory = sqlite3.Row
-    # 외래키 제약 활성화 (SQLite 는 기본 꺼져 있음)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+st.title("🏠 나에게 꼭 맞는 가족 찾기")
+st.write("간단한 설문으로 잘 맞는 품종을 추천하고, 내 지역의 입양 가능한 곳을 안내해 드립니다.")
 
+st.divider()
 
-# ── 스키마 초기화 ───────────────────────────────────────────────────
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS users (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    auth_kind   TEXT NOT NULL DEFAULT 'local',  -- 'local' (가짜 로그인) | 'kakao' | 'guest'
-    external_id TEXT,                            -- local: 닉네임 / kakao: 카카오 user id
-    kakao_id    TEXT UNIQUE,                     -- (호환용) 카카오 user id; external_id 와 중복돼도 OK
-    nickname    TEXT,
-    created_at  TEXT DEFAULT (datetime('now')),
-    UNIQUE (auth_kind, external_id)
-);
+FAV_KIND = "adoption"
 
-CREATE TABLE IF NOT EXISTS pets (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    name        TEXT NOT NULL,
-    species     TEXT,                        -- '강아지' / '고양이'
-    age         INTEGER,
-    weight      REAL,
-    neutered    INTEGER DEFAULT 0,           -- bool 대용 (0/1)
-    mer         INTEGER,                     -- 최근 계산된 하루 권장 칼로리
-    created_at  TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS schedules (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    pet_id      INTEGER,                     -- 반려동물이 안 골라져 있을 수도 있어 NULL 허용
-    care_type   TEXT NOT NULL,               -- '예방접종' 등
-    last_done   TEXT NOT NULL,               -- ISO 날짜 문자열
-    cycle_days  INTEGER DEFAULT 0,           -- 0 이면 1회성
-    next_due    TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (pet_id)  REFERENCES pets(id)  ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS records (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      INTEGER NOT NULL,
-    pet_id       INTEGER,
-    visit_date   TEXT NOT NULL,
-    hospital     TEXT,
-    visit_type   TEXT,                       -- '일반 진료' 등
-    weight       REAL,
-    cost         INTEGER DEFAULT 0,
-    diagnosis    TEXT,
-    prescription TEXT,
-    memo         TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (pet_id)  REFERENCES pets(id)  ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS favorites (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    kind        TEXT NOT NULL,               -- 'store'(용품/미용점) | 'facility'(장례식장)
-    place_name  TEXT NOT NULL,               -- CSV 의 가게명/시설명으로 식별
-    created_at  TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE (user_id, kind, place_name)       -- 같은 곳 중복 찜 방지
-);
-
-CREATE TABLE IF NOT EXISTS album_photo (
-    user_id     INTEGER PRIMARY KEY,         -- 계정당 대표 사진 1장
-    photo_b64   TEXT,                         -- base64 인코딩된 이미지
-    updated_at  TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS album_memories (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    memory_date TEXT NOT NULL,                -- 추억 날짜 (ISO)
-    memo        TEXT,                          -- 추억 메모
-    created_at  TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-"""
+# =========================
+# CSV 로드
+# =========================
+BREEDS_PATH = os.path.join(BASE_DIR, "data", "breeds.csv")
+PETSHOP_PATH = os.path.join(BASE_DIR, "data", "petshop.csv")
 
 
-def init_db():
-    """앱 시작 시 한 번 호출. 테이블이 없으면 만들고, 익명 사용자도 보장한다."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    with get_conn() as conn:
-        conn.executescript(SCHEMA)
-        # 익명 사용자(id=1) 가 없으면 만든다.
-        # 로그인 안 하고 들어온 방문자가 이 사용자 소유로 데이터를 쌓는다.
-        conn.execute(
-            """INSERT OR IGNORE INTO users (id, auth_kind, external_id, nickname)
-               VALUES (1, 'guest', 'guest', '게스트')"""
-        )
+@st.cache_data
+def load_csv(path):
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    df.columns = df.columns.str.strip()
+    return df
 
 
-def current_user_id():
-    """현재 로그인된 사용자 ID. 로그인 안 했으면 게스트(1) 반환.
+df = load_csv(BREEDS_PATH)
+shop_df = load_csv(PETSHOP_PATH)
 
-    세션 키는 auth.py 에서 채워준다.
-    """
-    return st.session_state.get("user_id", 1)
+df["allergy_friendly"] = df["allergy_friendly"].astype(str).str.lower().eq("true")
 
 
-def get_or_create_user(kind: str, external_id: str, nickname: str) -> int:
-    """auth_kind + external_id 로 사용자를 찾고, 없으면 만든다.
+# =========================
+# 사용자 입력 (품종 추천용)
+# =========================
+col1, col2 = st.columns(2)
+with col1:
+    pet_type = st.selectbox("선호하는 동물", ["강아지", "고양이", "상관없음"])
+    living_env = st.radio("주거 환경", ["아파트/빌라", "단독주택", "마당 있는 집"])
 
-    가짜 로그인:  kind='local',  external_id=<닉네임>
-    카카오 로그인: kind='kakao', external_id=<카카오 user id>
+# 선호 동물이 바뀌면 추천 결과 초기화
+if "last_pet_type" not in st.session_state:
+    st.session_state.last_pet_type = pet_type
+if st.session_state.last_pet_type != pet_type:
+    st.session_state.top3 = None
+    st.session_state.selected = None
+    st.session_state.last_pet_type = pet_type
 
-    페이지 코드가 이 함수만 알면 되도록, 인증 종류별 분기는 여기 안에 가둔다.
-    """
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT id FROM users WHERE auth_kind = ? AND external_id = ?",
-            (kind, external_id),
-        ).fetchone()
-        if row:
-            # 닉네임이 바뀌었을 수 있으니 가볍게 갱신
-            conn.execute("UPDATE users SET nickname = ? WHERE id = ?",
-                         (nickname, row["id"]))
-            return row["id"]
-
-        cur = conn.execute(
-            """INSERT INTO users (auth_kind, external_id, kakao_id, nickname)
-               VALUES (?, ?, ?, ?)""",
-            (kind, external_id,
-             external_id if kind == "kakao" else None,
-             nickname),
-        )
-        return cur.lastrowid
+with col2:
+    activity_level = st.select_slider(
+        "활동량", options=["매우 적음", "보통", "활동적", "매우 활동적"]
+    )
+    has_allergy = st.checkbox("털 알러지가 있나요?")
 
 
-# ── pets ───────────────────────────────────────────────────────────
-def get_pets():
-    """현재 사용자의 반려동물 목록을 dict 리스트로 반환."""
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM pets WHERE user_id = ? ORDER BY created_at",
-            (current_user_id(),),
-        ).fetchall()
-    return [dict(r) for r in rows]
+def score(row):
+    s = 0
+    if pet_type == "상관없음":
+        s += 3
+    elif row["type"] == pet_type:
+        s += 3
+    if row["energy"] == activity_level:
+        s += 3
+    if living_env == "아파트/빌라" and row["size"] == "소형":
+        s += 2
+    elif living_env == "단독주택" and row["size"] in ["소형", "중형"]:
+        s += 2
+    elif living_env == "마당 있는 집" and row["size"] in ["중형", "대형"]:
+        s += 2
+    if has_allergy:
+        s += 3 if row["allergy_friendly"] else -3
+    return s
 
 
-def upsert_pet(name, species, age, weight, neutered, mer):
-    """같은 이름의 반려동물이 있으면 갱신, 없으면 추가."""
-    with get_conn() as conn:
-        existing = conn.execute(
-            "SELECT id FROM pets WHERE user_id = ? AND name = ?",
-            (current_user_id(), name),
-        ).fetchone()
-
-        if existing:
-            conn.execute(
-                """UPDATE pets
-                   SET species=?, age=?, weight=?, neutered=?, mer=?
-                   WHERE id=?""",
-                (species, age, weight, int(neutered), mer, existing["id"]),
-            )
-            return existing["id"]
-        else:
-            cur = conn.execute(
-                """INSERT INTO pets (user_id, name, species, age, weight, neutered, mer)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (current_user_id(), name, species, age, weight, int(neutered), mer),
-            )
-            return cur.lastrowid
+if "top3" not in st.session_state:
+    st.session_state.top3 = None
+if "selected" not in st.session_state:
+    st.session_state.selected = None
 
 
-def delete_pet(pet_id):
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM pets WHERE id = ? AND user_id = ?",
-            (pet_id, current_user_id()),
-        )
-
-
-# ── schedules ──────────────────────────────────────────────────────
-def _to_iso(d):
-    """date 객체든 문자열이든 ISO 문자열로 통일."""
-    return d.isoformat() if isinstance(d, (date, datetime)) else str(d)
-
-
-def get_schedules():
-    """다가오는 순서로 정렬된 일정 목록. 반려동물 이름도 JOIN 으로 같이 가져온다."""
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT s.*, p.name AS pet_name
-               FROM schedules s
-               LEFT JOIN pets p ON p.id = s.pet_id
-               WHERE s.user_id = ?
-               ORDER BY s.next_due""",
-            (current_user_id(),),
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def add_schedule(pet_id, care_type, last_done, cycle_days, next_due):
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO schedules
-               (user_id, pet_id, care_type, last_done, cycle_days, next_due)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (current_user_id(), pet_id, care_type,
-             _to_iso(last_done), cycle_days, _to_iso(next_due)),
-        )
-
-
-def complete_schedule(schedule_id, today, cycle_days):
-    """완료 처리: 주기가 있으면 다음 날짜로 갱신, 없으면 삭제."""
-    from datetime import timedelta
-    with get_conn() as conn:
-        if cycle_days:
-            new_next = today + timedelta(days=cycle_days)
-            conn.execute(
-                "UPDATE schedules SET last_done=?, next_due=? WHERE id=? AND user_id=?",
-                (_to_iso(today), _to_iso(new_next), schedule_id, current_user_id()),
-            )
-        else:
-            conn.execute(
-                "DELETE FROM schedules WHERE id=? AND user_id=?",
-                (schedule_id, current_user_id()),
-            )
-
-
-# ── records ────────────────────────────────────────────────────────
-def get_records(pet_id=None):
-    """진료 기록을 최신순으로. pet_id 주면 그 반려동물 것만."""
-    sql = """SELECT r.*, p.name AS pet_name
-             FROM records r
-             LEFT JOIN pets p ON p.id = r.pet_id
-             WHERE r.user_id = ?"""
-    params = [current_user_id()]
-    if pet_id is not None:
-        sql += " AND r.pet_id = ?"
-        params.append(pet_id)
-    sql += " ORDER BY r.visit_date DESC, r.id DESC"
-
-    with get_conn() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [dict(r) for r in rows]
-
-
-def add_record(pet_id, visit_date, hospital, visit_type, weight, cost,
-               diagnosis, prescription, memo):
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO records
-               (user_id, pet_id, visit_date, hospital, visit_type,
-                weight, cost, diagnosis, prescription, memo)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (current_user_id(), pet_id, _to_iso(visit_date),
-             hospital, visit_type, weight, cost,
-             diagnosis, prescription, memo),
-        )
-
-
-def delete_record(record_id):
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM records WHERE id=? AND user_id=?",
-            (record_id, current_user_id()),
-        )
-
-
-# ── favorites (즐겨찾기) ────────────────────────────────────────────
-def get_favorites(kind):
-    """현재 사용자가 즐겨찾기한 장소 '이름' 집합을 반환.
-
-    kind: 'store' 또는 'facility'
-    집합(set)으로 주므로, 페이지에서 `name in favs` 로 빠르게 찜 여부 판단 가능.
-    """
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT place_name FROM favorites WHERE user_id=? AND kind=?",
-            (current_user_id(), kind),
-        ).fetchall()
-    return {r["place_name"] for r in rows}
-
-
-def is_favorite(kind, place_name):
-    """특정 장소가 즐겨찾기 되어 있는지 여부."""
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT 1 FROM favorites WHERE user_id=? AND kind=? AND place_name=?",
-            (current_user_id(), kind, place_name),
-        ).fetchone()
-    return row is not None
-
-
-def add_favorite(kind, place_name):
-    """즐겨찾기 추가. 이미 있으면 UNIQUE 제약으로 조용히 무시."""
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT OR IGNORE INTO favorites (user_id, kind, place_name)
-               VALUES (?, ?, ?)""",
-            (current_user_id(), kind, place_name),
-        )
-
-
-def remove_favorite(kind, place_name):
-    """즐겨찾기 삭제."""
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM favorites WHERE user_id=? AND kind=? AND place_name=?",
-            (current_user_id(), kind, place_name),
-        )
-
-
-def toggle_favorite(kind, place_name):
-    """찜 상태를 뒤집고, 결과가 '추가됨'이면 True, '삭제됨'이면 False 반환.
-
-    페이지에서 이 반환값으로 토스트 메시지를 고를 수 있다.
-    """
-    if is_favorite(kind, place_name):
-        remove_favorite(kind, place_name)
-        return False
+# =========================
+# 추천 실행
+# =========================
+if st.button("추천 품종 보기", type="primary"):
+    result = df.copy()
+    result["score"] = result.apply(score, axis=1)
+    if pet_type == "상관없음":
+        dog = result[result["type"] == "강아지"].sort_values("score", ascending=False).head(3)
+        cat = result[result["type"] == "고양이"].sort_values("score", ascending=False).head(3)
+        st.session_state.top3 = pd.concat([dog, cat])
     else:
-        add_favorite(kind, place_name)
-        return True
+        st.session_state.top3 = result.sort_values("score", ascending=False).head(3)
+    st.session_state.selected = None
 
 
-# ── album (추억 앨범) ──────────────────────────────────────────────
-def get_album_photo():
-    """현재 사용자의 대표 사진(base64)을 반환. 없으면 None."""
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT photo_b64 FROM album_photo WHERE user_id=?",
-            (current_user_id(),),
-        ).fetchone()
-    return row["photo_b64"] if row else None
+# =========================
+# TOP3 출력
+# =========================
+def breed_cards(rows, emoji, key_prefix):
+    cols = st.columns(len(rows)) if len(rows) > 0 else []
+    for col, (_, row) in zip(cols, rows.iterrows()):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"### {emoji} {row['breed']}")
+                st.write(f"📏 크기: {row['size']}")
+                if st.button("상세 보기", key=f"{key_prefix}_{row['breed']}"):
+                    st.session_state.selected = row
 
 
-def set_album_photo(photo_b64):
-    """대표 사진을 저장/교체 (계정당 1장)."""
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO album_photo (user_id, photo_b64, updated_at)
-               VALUES (?, ?, datetime('now'))
-               ON CONFLICT(user_id) DO UPDATE SET
-                   photo_b64=excluded.photo_b64,
-                   updated_at=datetime('now')""",
-            (current_user_id(), photo_b64),
-        )
+if st.session_state.top3 is not None:
+    if pet_type == "상관없음":
+        dog = st.session_state.top3[st.session_state.top3["type"] == "강아지"]
+        cat = st.session_state.top3[st.session_state.top3["type"] == "고양이"]
+        st.success("🏆 강아지 TOP 3")
+        breed_cards(dog, "🐶", "dog")
+        st.success("🏆 고양이 TOP 3")
+        breed_cards(cat, "😺", "cat")
+    else:
+        st.success("🏆 추천 TOP 3")
+        emoji = "🐶" if pet_type == "강아지" else "😺"
+        breed_cards(st.session_state.top3, emoji, "pick")
 
 
-def delete_album_photo():
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM album_photo WHERE user_id=?",
-            (current_user_id(),),
-        )
+# =========================
+# 상세 정보
+# =========================
+if st.session_state.selected is not None:
+    pet = st.session_state.selected
+    st.divider()
+    st.subheader(f"📌 {pet['breed']} 상세 정보")
+    st.write(f"🏥 대표 질환: {pet['main_disease']}")
+    st.write(f"⏳ 기대 수명: {pet['life_span']}")
+    st.write(f"💰 양육비(월): {pet['cost']}")
+    st.write(f"⚡ 활동량: {pet['energy']}")
+    st.write(f"🧬 털 빠짐: {pet['shedding']}")
+    if pet["allergy_friendly"]:
+        st.success("알러지 친화 품종")
+    if st.button("상세 닫기"):
+        st.session_state.selected = None
+        st.rerun()
 
 
-def get_memories():
-    """추억 기록을 날짜 오름차순으로 반환."""
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT * FROM album_memories WHERE user_id=?
-               ORDER BY memory_date""",
-            (current_user_id(),),
-        ).fetchall()
-    return [dict(r) for r in rows]
+# =========================
+# 위치 기반 입양처 찾기 (시군구 선택 방식)
+# =========================
+st.divider()
+st.subheader("🗺 내 지역 입양 가능한 곳 찾기")
+st.caption("지역을 선택하면 그 지역의 입양 가능한 보호소·센터를 모두 보여드립니다.")
+
+sido, sigungu, dong = region_selectors(shop_df, key_prefix="adopt")
+filtered = filter_places(shop_df, sido, sigungu, dong)
+
+st.write(f"**📍 검색 결과: {len(filtered)}곳**")
 
 
-def add_memory(memory_date, memo):
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO album_memories (user_id, memory_date, memo)
-               VALUES (?, ?, ?)""",
-            (current_user_id(), _to_iso(memory_date), memo),
-        )
+def build_popup_html(row):
+    tel = ""  # petshop.csv 에 전화번호가 없으면 생략
+    map_link = f"https://map.kakao.com/link/to/{row['name']},{row['lat']},{row['lon']}"
+    return f"""
+    <div style="font-family:-apple-system,sans-serif; width:220px;">
+        <div style="font-size:15px; font-weight:700; margin-bottom:2px;">{row['name']}</div>
+        <div style="font-size:12px; color:#888; margin-bottom:6px;">
+            {row['시군구']} {row['동']} · {row['animal_type']}
+        </div>
+        <div style="font-size:13px; margin-bottom:8px;">🐾 입양 가능: {row['breed']}</div>
+        <a href="{map_link}" target="_blank"
+           style="display:inline-block; padding:5px 10px; background:#2196F3;
+                  color:#fff; text-decoration:none; border-radius:5px; font-size:13px;">
+           🧭 길찾기</a>
+    </div>
+    """
 
 
-def delete_memory(memory_id):
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM album_memories WHERE id=? AND user_id=?",
-            (memory_id, current_user_id()),
-        )
+def adopt_card(row, favs):
+    name = row["name"]
+    is_fav = name in favs
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([5, 2, 1])
+        with c1:
+            st.write(f"🏠 **{name}**  ·  {row['animal_type']}")
+            st.caption(f"📍 {row['시군구']} {row['동']}  ·  🐾 {row['breed']}")
+        with c2:
+            map_link = f"https://map.kakao.com/link/to/{name},{row['lat']},{row['lon']}"
+            st.markdown(
+                f"<a href='{map_link}' target='_blank' "
+                f"style='text-decoration:none;'>🧭 길찾기</a>",
+                unsafe_allow_html=True,
+            )
+        with c3:
+            if auth.is_logged_in():
+                label = "⭐" if is_fav else "☆"
+                if st.button(label, key=f"fav_{FAV_KIND}_{name}", help="즐겨찾기"):
+                    added = toggle_favorite(FAV_KIND, name)
+                    if added:
+                        st.toast(f"⭐ '{name}'을(를) 즐겨찾기에 추가했어요.")
+                    else:
+                        st.toast(f"☆ '{name}'을(를) 즐겨찾기에서 뺐어요.")
+                    st.rerun()
 
 
-# ── 모듈 import 시 자동 초기화 ─────────────────────────────────────
-# 어떤 페이지로 직접 진입하든(예: /health) 테이블이 보장되도록,
-# db.py 가 처음 import 되는 시점에 한 번 init_db() 를 호출한다.
-# init_db() 내부에서 CREATE TABLE IF NOT EXISTS 를 쓰므로 중복 호출도 안전.
-init_db()
+if filtered.empty:
+    st.info("선택한 지역에 등록된 입양처가 없어요. 다른 지역이나 '전체'로 검색해 보세요.")
+else:
+    favs = get_favorites(FAV_KIND) if auth.is_logged_in() else set()
+
+    # 즐겨찾기 섹션 (로그인 시에만)
+    if auth.is_logged_in():
+        fav_df = filtered[filtered["name"].isin(favs)]
+        if not fav_df.empty:
+            st.markdown("##### ⭐ 이 지역의 즐겨찾기")
+            for _, row in fav_df.iterrows():
+                adopt_card(row, favs)
+            st.divider()
+
+    # 지도
+    avg_lat = filtered["lat"].mean()
+    avg_lon = filtered["lon"].mean()
+    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=12, control_scale=True)
+    for _, row in filtered.iterrows():
+        folium.Marker(
+            [row["lat"], row["lon"]],
+            popup=folium.Popup(build_popup_html(row), max_width=260),
+            tooltip=row["name"],
+            icon=folium.Icon(color="orange", icon="home", prefix="fa"),
+        ).add_to(m)
+    if len(filtered) > 1:
+        bounds = [
+            [filtered["lat"].min(), filtered["lon"].min()],
+            [filtered["lat"].max(), filtered["lon"].max()],
+        ]
+        m.fit_bounds(bounds, padding=(30, 30))
+    st_folium(m, use_container_width=True, height=500, returned_objects=[])
+
+    # 목록
+    st.markdown("##### 📋 입양처 목록  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+    for _, row in filtered.iterrows():
+        adopt_card(row, favs)
