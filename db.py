@@ -91,6 +91,22 @@ CREATE TABLE IF NOT EXISTS favorites (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE (user_id, kind, place_name)       -- 같은 곳 중복 찜 방지
 );
+
+CREATE TABLE IF NOT EXISTS album_photo (
+    user_id     INTEGER PRIMARY KEY,         -- 계정당 대표 사진 1장
+    photo_b64   TEXT,                         -- base64 인코딩된 이미지
+    updated_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS album_memories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    memory_date TEXT NOT NULL,                -- 추억 날짜 (ISO)
+    memo        TEXT,                          -- 추억 메모
+    created_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 """
 
 
@@ -331,6 +347,66 @@ def toggle_favorite(kind, place_name):
     else:
         add_favorite(kind, place_name)
         return True
+
+
+# ── album (추억 앨범) ──────────────────────────────────────────────
+def get_album_photo():
+    """현재 사용자의 대표 사진(base64)을 반환. 없으면 None."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT photo_b64 FROM album_photo WHERE user_id=?",
+            (current_user_id(),),
+        ).fetchone()
+    return row["photo_b64"] if row else None
+
+
+def set_album_photo(photo_b64):
+    """대표 사진을 저장/교체 (계정당 1장)."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO album_photo (user_id, photo_b64, updated_at)
+               VALUES (?, ?, datetime('now'))
+               ON CONFLICT(user_id) DO UPDATE SET
+                   photo_b64=excluded.photo_b64,
+                   updated_at=datetime('now')""",
+            (current_user_id(), photo_b64),
+        )
+
+
+def delete_album_photo():
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM album_photo WHERE user_id=?",
+            (current_user_id(),),
+        )
+
+
+def get_memories():
+    """추억 기록을 날짜 오름차순으로 반환."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM album_memories WHERE user_id=?
+               ORDER BY memory_date""",
+            (current_user_id(),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_memory(memory_date, memo):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO album_memories (user_id, memory_date, memo)
+               VALUES (?, ?, ?)""",
+            (current_user_id(), _to_iso(memory_date), memo),
+        )
+
+
+def delete_memory(memory_id):
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM album_memories WHERE id=? AND user_id=?",
+            (memory_id, current_user_id()),
+        )
 
 
 # ── 모듈 import 시 자동 초기화 ─────────────────────────────────────

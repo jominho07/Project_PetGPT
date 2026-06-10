@@ -35,7 +35,7 @@ with c4:
     st.caption("내 주변 펫 용품점을 거리순으로 안내")
 with c5:
     st.markdown("#### 🕯️ 마지막 안녕")
-    st.caption("내 주변 반려동물 장례식장 안내")
+    st.caption("장례식장 안내 + 추억 앨범 기록")
 with c6:
     st.markdown("#### 🐶 내 반려동물")
     st.caption("등록한 프로필을 사이드바에서 확인")

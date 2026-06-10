@@ -93,33 +93,36 @@ def store_card(row, favs):
                 unsafe_allow_html=True,
             )
         with c3:
-            # 빈 별 ☆ / 채운 별 ⭐ 토글
-            label = "⭐" if is_fav else "☆"
-            if st.button(label, key=f"fav_{FAV_KIND}_{name}",
-                         help="즐겨찾기"):
-                added = toggle_favorite(FAV_KIND, name)
-                if added:
-                    st.toast(f"⭐ '{name}'을(를) 즐겨찾기에 추가했어요.")
-                else:
-                    st.toast(f"☆ '{name}'을(를) 즐겨찾기에서 뺐어요.")
-                st.rerun()
+            # 로그인한 사용자에게만 즐겨찾기 별표를 보여준다.
+            if auth.is_logged_in():
+                label = "⭐" if is_fav else "☆"
+                if st.button(label, key=f"fav_{FAV_KIND}_{name}",
+                             help="즐겨찾기"):
+                    added = toggle_favorite(FAV_KIND, name)
+                    if added:
+                        st.toast(f"⭐ '{name}'을(를) 즐겨찾기에 추가했어요.")
+                    else:
+                        st.toast(f"☆ '{name}'을(를) 즐겨찾기에서 뺐어요.")
+                    st.rerun()
 
 
 if df.empty:
     st.warning("표시할 가게 데이터가 없습니다. data 폴더 안에 stores.csv 파일이 "
                "올바르게 있는지 확인해주세요.")
 else:
-    favs = get_favorites(FAV_KIND)   # 현재 사용자의 찜 목록(이름 집합)
+    # 로그인한 사용자만 즐겨찾기를 불러온다. 비로그인은 빈 집합.
+    favs = get_favorites(FAV_KIND) if auth.is_logged_in() else set()
 
-    # ── 상단: 내 즐겨찾기 섹션 ─────────────────────────────────────
-    st.divider()
-    st.subheader("⭐ 내 즐겨찾기")
-    fav_df = df[df["가게명"].isin(favs)]
-    if fav_df.empty:
-        st.caption("아직 즐겨찾기한 가게가 없어요. 아래 목록에서 ☆ 별을 눌러 추가해 보세요.")
-    else:
-        for _, row in fav_df.iterrows():
-            store_card(row, favs)
+    # ── 상단: 내 즐겨찾기 섹션 (로그인 시에만) ────────────────────
+    if auth.is_logged_in():
+        st.divider()
+        st.subheader("⭐ 내 즐겨찾기")
+        fav_df = df[df["가게명"].isin(favs)]
+        if fav_df.empty:
+            st.caption("아직 즐겨찾기한 가게가 없어요. 아래 목록에서 ☆ 별을 눌러 추가해 보세요.")
+        else:
+            for _, row in fav_df.iterrows():
+                store_card(row, favs)
 
     # ── 검색 영역 ─────────────────────────────────────────────────
     st.divider()
