@@ -1,7 +1,6 @@
 """SQLite 데이터 접근 계층.
 
 페이지들은 이 모듈의 함수만 호출하면 되고, SQL 을 직접 다루지 않는다.
-나중에 카카오 로그인을 붙일 때는 current_user_id() 만 바꿔주면 된다.
 """
 import os
 import json
@@ -118,6 +117,25 @@ CREATE TABLE IF NOT EXISTS medications (
     start_date  TEXT NOT NULL,                -- 등록일
     end_date    TEXT NOT NULL,                -- 반복 종료일
     created_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS posts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id     INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 """
@@ -462,6 +480,47 @@ def delete_medication(med_id):
             (med_id, current_user_id()),
         )
 
+def get_posts():
+    """게시글 목록과 작성자 닉네임을 최신순으로 가져온다."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT p.*, u.nickname AS author_name, u.auth_kind
+               FROM posts p
+               LEFT JOIN users u ON p.user_id = u.id
+               ORDER BY p.created_at DESC"""
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+def add_post(title, content):
+    """새 게시글 작성. 현재 사용자의 ID로 자동 등록된다."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO posts (user_id, title, content)
+               VALUES (?, ?, ?)""",
+            (current_user_id(), title, content)
+        )
+
+def get_comments(post_id):
+    """특정 게시글의 댓글 목록과 작성자 닉네임을 오름차순으로 가져온다."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT c.*, u.nickname AS author_name, u.auth_kind
+               FROM comments c
+               LEFT JOIN users u ON c.user_id = u.id
+               WHERE c.post_id = ?
+               ORDER BY c.created_at ASC""",
+            (post_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+def add_comment(post_id, content):
+    """게시글에 새 댓글 작성. 현재 사용자의 ID로 자동 등록된다."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO comments (post_id, user_id, content)
+               VALUES (?, ?, ?)""",
+            (post_id, current_user_id(), content)
+        )
 
 # ── 모듈 import 시 자동 초기화 ─────────────────────────────────────
 # 어떤 페이지로 직접 진입하든(예: /health) 테이블이 보장되도록,

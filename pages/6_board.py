@@ -1,0 +1,76 @@
+import streamlit as st
+import db
+
+# 페이지 기본 설정
+st.set_page_config(page_title="반려인 소통 게시판", page_icon="💬")
+
+st.title("💬 소통 게시판")
+st.markdown("반려동물을 키우면서 얻은 꿀팁이나 고민을 공유해보세요!")
+
+# 현재 접속자 정보 표시 (db.py 로직 활용)
+user_id = db.current_user_id()
+if user_id == 1:
+    st.info("💡 현재 **익명(게스트)** 상태입니다. 닉네임으로 활동하려면 왼쪽에서 로그인해주세요.")
+else:
+    nickname = st.session_state.get('nickname', '회원')
+    st.success(f"현재 **{nickname}**님으로 접속 중입니다.")
+
+st.divider()
+
+# ── 새 글 작성 영역 ──
+with st.expander("✍️ 새로운 글 작성하기"):
+    with st.form("new_post_form", clear_on_submit=True):
+        title = st.text_input("제목", placeholder="제목을 입력하세요")
+        content = st.text_area("내용", placeholder="내용을 입력하세요")
+        submitted = st.form_submit_button("글 등록")
+        
+        if submitted:
+            if title.strip() and content.strip():
+                db.add_post(title, content)
+                st.toast("게시글이 성공적으로 등록되었습니다!", icon="✅")
+                st.rerun()
+            else:
+                st.warning("제목과 내용을 모두 입력해주세요.")
+
+st.divider()
+
+# ── 게시글 목록 및 댓글 영역 ──
+st.subheader("📋 전체 게시글")
+posts = db.get_posts()
+
+if not posts:
+    st.info("아직 등록된 게시글이 없습니다. 첫 글의 주인공이 되어보세요!")
+else:
+    for post in posts:
+        # 익명 사용자의 경우 이름을 '익명(게스트)'로 고정
+        display_name = "익명(게스트)" if post['auth_kind'] == 'guest' else post['author_name']
+        
+        # 각 글을 Expander(접기/펼치기) 뷰로 생성
+        with st.expander(f"{post['title']} | 👤 {display_name} | 🕒 {post['created_at'][:16]}"):
+            st.markdown(post['content'])
+            st.divider()
+            
+            # ─ 댓글 영역 ─
+            comments = db.get_comments(post['id'])
+            if comments:
+                for c in comments:
+                    c_name = "익명(게스트)" if c['auth_kind'] == 'guest' else c['author_name']
+                    st.caption(f"**{c_name}**: {c['content']} ({c['created_at'][:16]})")
+            else:
+                st.caption("등록된 댓글이 없습니다.")
+            
+            # ─ 새 댓글 작성 폼 ─
+            # Streamlit의 form 충돌을 막기 위해 post['id']를 key로 활용
+            with st.form(key=f"comment_form_{post['id']}", clear_on_submit=True):
+                c_col1, c_col2 = st.columns([4, 1])
+                with c_col1:
+                    comment_text = st.text_input("댓글 쓰기", label_visibility="collapsed", placeholder="댓글을 남겨보세요")
+                with c_col2:
+                    comment_submitted = st.form_submit_button("등록")
+                
+                if comment_submitted:
+                    if comment_text.strip():
+                        db.add_comment(post['id'], comment_text)
+                        st.rerun()
+                    else:
+                        st.warning("댓글 내용을 입력하세요.")
