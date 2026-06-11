@@ -168,7 +168,12 @@ with tab_schedule:
                 c1.write(f"🐾 **{pet_display}** : `{s['care_type']}`")
                 cycle_text = f"{s['cycle_days']}일마다 반복" if s.get("cycle_days") else "반복 없음"
                 c1.caption(f"일정일: {s['next_due']} | {cycle_text}")
-                if c2.button("완료", key=f"done_day_{s['id']}", type="primary", use_container_width=True):
+                # 단발성/반복에 따라 완료 시 동작이 다르므로 버튼 텍스트로 미리 알림
+                if s["cycle_days"]:
+                    btn_label = "완료 (다음 주기로)"
+                else:
+                    btn_label = "완료 (목록에서 제거)"
+                if c2.button(btn_label, key=f"done_day_{s['id']}", type="primary", use_container_width=True):
                     complete_schedule(s["id"], date.today(), s["cycle_days"])
                     if s["cycle_days"]:
                         st.toast(f"'{s['care_type']}' 완료! 다음 일정으로 갱신했어요 ✨", icon="✅")

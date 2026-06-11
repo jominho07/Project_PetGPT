@@ -5,7 +5,7 @@ import base64
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth
-from db import upsert_pet
+from db import upsert_pet, get_pets, delete_pet
 
 auth.login_widget()
 
@@ -550,7 +550,33 @@ if st.session_state.diet_results:
 if st.session_state.diet_results:
 
     st.divider()
-    st.subheader("🐶🐱 저장된 프로필 관리")
+
+    # ── DB 기반 목록 (영구 저장, 새로고침해도 유지) ──────────────────
+    st.subheader("🐾 등록된 반려동물 (영구 저장)")
+    st.caption("아래 목록은 계정에 저장되어 새로고침해도 유지되며, "
+               "사이드바·건강 수첩과 연결됩니다.")
+    db_pets = get_pets()
+    if db_pets:
+        db_rows = []
+        for p in db_pets:
+            db_rows.append({
+                "이름": p["name"],
+                "종류": p.get("species") or "-",
+                "나이": p["age"],
+                "몸무게(kg)": p["weight"],
+                "중성화": "완료" if p.get("neutered") else "안 함",
+                "하루 권장 칼로리": p.get("mer") or "-",
+            })
+        st.dataframe(pd.DataFrame(db_rows), use_container_width=True, hide_index=True)
+    else:
+        st.caption("아직 DB에 저장된 반려동물이 없어요.")
+
+    st.divider()
+
+    # ── 세션 기반 분석 결과 (사진·고민 포함, 새로고침 시 사라짐) ──────
+    st.subheader("🐶🐱 이번 세션 분석 결과")
+    st.info("📷 사진·고민 등 상세 분석 결과는 **이번 접속 동안만** 보여집니다. "
+            "(새로고침하면 사라져요. 이름·나이·몸무게 등 기본 정보는 위 '등록된 반려동물'에 영구 저장됩니다.)")
 
     result_df = pd.DataFrame(st.session_state.diet_results)
 
@@ -761,7 +787,14 @@ if st.session_state.diet_results:
 
         with b2:
             if st.button("삭제하기"):
+                # 세션과 DB 모두에서 삭제 (불일치 방지)
+                pet_name = st.session_state.diet_results[selected_index].get("이름")
                 del st.session_state.diet_results[selected_index]
+                if pet_name:
+                    for p in get_pets():
+                        if p["name"] == pet_name:
+                            delete_pet(p["id"])
+                            break
                 st.success("프로필이 삭제되었습니다.")
                 st.rerun()
 
