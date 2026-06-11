@@ -9,7 +9,7 @@ from db import upsert_pet, get_pets, delete_pet
 
 auth.login_widget()
 
-st.title("🥗 건강한 맞춤 식단 매니저")
+st.title("맞춤 식단 매니저")
 st.write("품종 데이터와 반려동물 상태를 기반으로 하루 권장 칼로리와 맞춤 사료를 추천합니다.")
 
 st.divider()
@@ -285,7 +285,7 @@ if "diet_results" not in st.session_state:
 # 입력 UI
 # =========================
 
-st.subheader("🐾 반려동물 프로필 등록")
+st.subheader("반려동물 프로필 등록")
 
 with st.container(border=True):
     name = st.text_input("반려동물 이름", placeholder="예: 멍멍이")
@@ -425,7 +425,7 @@ if st.session_state.diet_results:
     latest = st.session_state.diet_results[-1]
 
     st.divider()
-    st.subheader(f"📊 {latest['이름']} 맞춤 영양 결과")
+    st.subheader(f"{latest['이름']} 맞춤 영양 결과")
     show_profile_image(latest.get("프로필 사진"), width=160)
 
     st.caption(
@@ -457,7 +457,7 @@ if st.session_state.diet_results:
     # =========================
 
     st.divider()
-    st.subheader("🧬 건강 고민별 추천 영양 성분")
+    st.subheader("건강 고민별 추천 영양 성분")
 
     issue_list = latest["추천 기준"].split(", ") if latest["추천 기준"] != "기본 관리" else []
 
@@ -478,7 +478,7 @@ if st.session_state.diet_results:
     # =========================
 
     st.divider()
-    st.subheader("🔍 품종 기반 사료 비교 검색")
+    st.subheader("품종별 사료 비교")
 
     latest_breed_info = breed_df[
         breed_df["breed"] == latest["품종"]
@@ -535,7 +535,7 @@ if st.session_state.diet_results:
     # =========================
 
     st.divider()
-    st.subheader("⚠️ 반려동물 위험 음식 목록")
+    st.subheader("주의해야 할 음식")
 
     danger_cols = st.columns(4)
 
@@ -552,7 +552,7 @@ if st.session_state.diet_results:
     st.divider()
 
     # ── DB 기반 목록 (영구 저장, 새로고침해도 유지) ──────────────────
-    st.subheader("🐾 등록된 반려동물 (영구 저장)")
+    st.subheader("등록된 반려동물")
     st.caption("아래 목록은 계정에 저장되어 새로고침해도 유지되며, "
                "사이드바·건강 수첩과 연결됩니다.")
     db_pets = get_pets()
@@ -574,7 +574,7 @@ if st.session_state.diet_results:
     st.divider()
 
     # ── 세션 기반 분석 결과 (사진·고민 포함, 새로고침 시 사라짐) ──────
-    st.subheader("🐶🐱 이번 세션 분석 결과")
+    st.subheader("이번 분석 결과")
     st.info("📷 사진·고민 등 상세 분석 결과는 **이번 접속 동안만** 보여집니다. "
             "(새로고침하면 사라져요. 이름·나이·몸무게 등 기본 정보는 위 '등록된 반려동물'에 영구 저장됩니다.)")
 

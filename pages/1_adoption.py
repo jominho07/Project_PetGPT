@@ -13,8 +13,8 @@ from db import get_favorites, toggle_favorite
 
 auth.login_widget()
 
-st.title("🏠 나에게 꼭 맞는 가족 찾기")
-st.write("간단한 설문으로 잘 맞는 품종을 추천하고, 내 지역의 입양 가능한 곳을 안내해 드립니다.")
+st.title("나에게 꼭 맞는 가족 찾기")
+st.write("몇 가지 질문에 답하면 잘 맞는 품종을 추천하고, 가까운 입양처를 안내해 드려요.")
 
 st.divider()
 
@@ -111,8 +111,8 @@ def breed_cards(rows, emoji, key_prefix):
     for col, (_, row) in zip(cols, rows.iterrows()):
         with col:
             with st.container(border=True):
-                st.markdown(f"### {emoji} {row['breed']}")
-                st.write(f"📏 크기: {row['size']}")
+                st.markdown(f"### {row['breed']}")
+                st.write(f"크기  {row['size']}")
                 if st.button("상세 보기", key=f"{key_prefix}_{row['breed']}"):
                     st.session_state.selected = row
 
@@ -121,12 +121,12 @@ if st.session_state.top3 is not None:
     if pet_type == "상관없음":
         dog = st.session_state.top3[st.session_state.top3["type"] == "강아지"]
         cat = st.session_state.top3[st.session_state.top3["type"] == "고양이"]
-        st.success("🏆 강아지 TOP 3")
+        st.success("강아지 추천 3")
         breed_cards(dog, "🐶", "dog")
-        st.success("🏆 고양이 TOP 3")
+        st.success("고양이 추천 3")
         breed_cards(cat, "😺", "cat")
     else:
-        st.success("🏆 추천 TOP 3")
+        st.success("추천 3")
         emoji = "🐶" if pet_type == "강아지" else "😺"
         breed_cards(st.session_state.top3, emoji, "pick")
 
@@ -137,12 +137,12 @@ if st.session_state.top3 is not None:
 if st.session_state.selected is not None:
     pet = st.session_state.selected
     st.divider()
-    st.subheader(f"📌 {pet['breed']} 상세 정보")
-    st.write(f"🏥 대표 질환: {pet['main_disease']}")
-    st.write(f"⏳ 기대 수명: {pet['life_span']}")
-    st.write(f"💰 양육비(월): {pet['cost']}")
-    st.write(f"⚡ 활동량: {pet['energy']}")
-    st.write(f"🧬 털 빠짐: {pet['shedding']}")
+    st.subheader(f"{pet['breed']} 자세히 보기")
+    st.write(f"대표 질환  {pet['main_disease']}")
+    st.write(f"기대 수명  {pet['life_span']}")
+    st.write(f"월 양육비  {pet['cost']}")
+    st.write(f"활동량  {pet['energy']}")
+    st.write(f"털 빠짐  {pet['shedding']}")
     if pet["allergy_friendly"]:
         st.success("알러지 친화 품종")
     if st.button("상세 닫기"):
@@ -154,8 +154,8 @@ if st.session_state.selected is not None:
 # 위치 기반 입양처 찾기 (시군구 선택 방식)
 # =========================
 st.divider()
-st.subheader("🗺 내 지역 입양 가능한 곳 찾기")
-st.caption("지역을 선택하면 그 지역의 입양 가능한 보호소·센터를 모두 보여드립니다.")
+st.subheader("내 지역 입양처 찾기")
+st.caption("지역을 선택하면 그 지역의 보호소와 센터를 모두 보여드려요.")
 
 sido, sigungu, dong = region_selectors(shop_df, key_prefix="adopt")
 filtered = filter_places(shop_df, sido, sigungu, dong)
@@ -187,8 +187,8 @@ def adopt_card(row, favs):
     with st.container(border=True):
         c1, c2, c3 = st.columns([5, 2, 1])
         with c1:
-            st.write(f"🏠 **{name}**  ·  {row['animal_type']}")
-            st.caption(f"📍 {row['시군구']} {row['동']}  ·  🐾 {row['breed']}")
+            st.write(f"**{name}**  ·  {row['animal_type']}")
+            st.caption(f"{row['시군구']} {row['동']}  ·  입양 가능  {row['breed']}")
         with c2:
             map_link = f"https://map.kakao.com/link/to/{name},{row['lat']},{row['lon']}"
             st.markdown(
@@ -217,7 +217,7 @@ else:
     if auth.is_logged_in():
         fav_df = filtered[filtered["name"].isin(favs)]
         if not fav_df.empty:
-            st.markdown("##### ⭐ 이 지역의 즐겨찾기")
+            st.markdown("##### 이 지역의 즐겨찾기")
             for _, row in fav_df.iterrows():
                 adopt_card(row, favs)
             st.divider()
@@ -243,9 +243,9 @@ else:
 
     # 목록
     if auth.is_logged_in():
-        st.markdown("##### 📋 입양처 목록  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+        st.markdown("##### 입양처 목록  ·  별을 눌러 즐겨찾기에 담아요")
     else:
-        st.markdown("##### 📋 입양처 목록")
-        st.caption("로그인하면 ⭐ 즐겨찾기에 추가할 수 있어요.")
+        st.markdown("##### 입양처 목록")
+        st.caption("로그인하면 즐겨찾기에 담을 수 있어요.")
     for _, row in filtered.iterrows():
         adopt_card(row, favs)

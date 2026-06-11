@@ -15,8 +15,8 @@ if "selected_calendar_day" not in st.session_state:
 
 auth.login_widget()
 
-st.title("📒 건강 수첩")
-st.write("반복 일정부터 병원 진료 내용까지, 우리 아이의 건강 기록을 관리하세요.")
+st.title("건강 수첩")
+st.write("케어 일정부터 병원 기록, 복용 중인 약까지 한곳에서 관리해요.")
 
 pets = get_pets()
 pet_options = {p["name"]: p["id"] for p in pets}
@@ -25,9 +25,9 @@ pet_options = {p["name"]: p["id"] for p in pets}
 if not pets:
     st.info("아직 등록된 반려동물이 없어요. 먼저 반려동물을 등록하면 "
             "일정·진료·투약을 그 아이와 연결해 관리할 수 있어요.")
-    st.page_link("pages/2_diet.py", label="➕ 맞춤 식단 페이지에서 반려동물 등록하기")
+    st.page_link("pages/2_diet.py", label="맞춤 식단 페이지에서 반려동물 등록하기")
 
-tab_schedule, tab_record, tab_medication = st.tabs(["📅 케어 일정", "🏥 진료 기록", "💊 투약 관리"])
+tab_schedule, tab_record, tab_medication = st.tabs(["케어 일정", "진료 기록", "투약 관리"])
 
 def pet_picker(label, key, allow_text=True):
     if pet_options:
@@ -40,7 +40,7 @@ def pet_picker(label, key, allow_text=True):
 # 탭 1. 케어 일정
 # ════════════════════════════════════════════════════════════════════
 with tab_schedule:
-    st.subheader("➕ 일정 추가")
+    st.subheader("일정 추가")
     col1, col2 = st.columns(2)
     with col1:
         sch_pet_id, _ = pet_picker("대상 반려동물", "sch_pet")
@@ -60,7 +60,7 @@ with tab_schedule:
     st.divider()
 
     today = date.today()
-    st.subheader(f"🗓️ {today.year}년 {today.month}월 케어 달력")
+    st.subheader(f"{today.year}년 {today.month}월 케어 달력")
 
     st.markdown("""
         <style>
@@ -155,7 +155,7 @@ with tab_schedule:
 
     sel_day = st.session_state.selected_calendar_day
     st.write("")
-    st.markdown(f"#### 🔍 {sel_day}일 상세 일정 기록")
+    st.markdown(f"#### {sel_day}일 일정")
 
     day_schedules = schedule_map.get(sel_day, [])
     if not day_schedules:
@@ -185,7 +185,7 @@ with tab_schedule:
 # 탭 2. 진료 기록
 # ════════════════════════════════════════════════════════════════════
 with tab_record:
-    st.subheader("🏥 진료 기록 추가")
+    st.subheader("진료 기록 추가")
     col1, col2 = st.columns(2)
     with col1:
         rec_pet_id, _ = pet_picker("대상 반려동물", "rec_pet")
@@ -203,11 +203,11 @@ with tab_record:
         add_record(rec_pet_id, visit_date, hospital, visit_type, 0, cost, diagnosis, prescription, memo)
         st.rerun()
 
-    st.subheader("📋 진료 이력")
+    st.subheader("진료 이력")
     records = get_records()
     if records:
         records_df = pd.DataFrame(records)
-        st.download_button("📥 CSV 내보내기", records_df.to_csv(index=False), "records.csv", "text/csv", key="btn_download_csv")
+        st.download_button("CSV 내보내기", records_df.to_csv(index=False), "records.csv", "text/csv", key="btn_download_csv")
         for r in records:
             with st.expander(f"{r['visit_date']} · {r['pet_name'] or '미지정'} · {r['visit_type']}"):
                 st.write(f"🏥 병원: {r['hospital']} / 🩺 진단: {r['diagnosis']}")
@@ -218,7 +218,7 @@ with tab_record:
 # 탭 3. 투약 관리
 # ════════════════════════════════════════════════════════════════════
 with tab_medication:
-    st.subheader("💊 맞춤형 투약 관리")
+    st.subheader("투약 관리")
 
     med_name = st.text_input("약 이름", key="input_med_name")
     cycle = st.selectbox("반복 주기", ["매일", "매주", "매월", "매년"], key="input_cycle")
@@ -244,7 +244,7 @@ with tab_medication:
         else:
             st.warning("약 이름을 입력해 주세요.")
 
-    st.markdown("### ✅ 오늘 먹어야 할 약")
+    st.markdown("### 오늘 먹어야 할 약")
 
     # "오늘 체크했는지" 는 그날 한정 임시 정보라 session_state 로 둔다.
     # (약 데이터 자체는 DB 에 저장되므로 새로고침해도 안 사라짐)
@@ -287,7 +287,7 @@ with tab_medication:
                 st.session_state.checked_state[key] = is_checked
 
         st.write("---")
-        st.markdown("#### 📋 등록된 투약 목록")
+        st.markdown("#### 등록된 약")
         for med in meds:
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1])

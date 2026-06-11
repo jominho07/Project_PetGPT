@@ -15,8 +15,8 @@ from db import get_favorites, toggle_favorite
 
 auth.login_widget()
 
-st.title("🛍️ 내 주변 펫 용품점·미용점 찾기")
-st.write("내 위치(시/군/구/동)를 선택하면 가까운 반려동물 용품점과 미용점을 지도에 표시해 드립니다.")
+st.title("가까운 용품점·미용실 찾기")
+st.write("지역을 선택하면 가까운 반려동물 용품점과 미용실을 지도에서 보여드려요.")
 
 # 이 페이지에서 다루는 즐겨찾기 종류
 FAV_KIND = "store"
@@ -80,7 +80,7 @@ def store_card(row, favs):
         c1, c2, c3 = st.columns([5, 2, 1])
         with c1:
             st.write(f"**{name}**  ·  {row['종류']}")
-            st.caption(f"📍 {row['시군구']} {row['동']}  ·  "
+            st.caption(f"{row['시군구']} {row['동']}  ·  "
                        f"🏷️ {row['특징']}  ·  ☎ {row['전화번호']}")
         with c2:
             map_link = (f"https://map.kakao.com/link/to/"
@@ -116,17 +116,17 @@ else:
     # ── 상단: 내 즐겨찾기 섹션 (로그인 시에만) ────────────────────
     if auth.is_logged_in():
         st.divider()
-        st.subheader("⭐ 내 즐겨찾기")
+        st.subheader("내 즐겨찾기")
         fav_df = df[df["가게명"].isin(favs)]
         if fav_df.empty:
-            st.caption("아직 즐겨찾기한 가게가 없어요. 아래 목록에서 ☆ 별을 눌러 추가해 보세요.")
+            st.caption("아직 즐겨찾기한 가게가 없어요. 아래 목록에서 별을 눌러 담아 보세요.")
         else:
             for _, row in fav_df.iterrows():
                 store_card(row, favs)
 
     # ── 검색 영역 ─────────────────────────────────────────────────
     st.divider()
-    st.subheader("🔎 가게 찾기")
+    st.subheader("가게 찾기")
 
     sido, sigungu, dong = region_selectors(df, key_prefix="shop")
     filtered = filter_places(df, sido, sigungu, dong)
@@ -140,7 +140,7 @@ else:
     if chosen:
         filtered = filtered[filtered["종류"].isin(chosen)]
 
-    st.write(f"**📍 검색 결과: {len(filtered)}곳**")
+    st.write(f"**검색 결과 {len(filtered)}곳**")
 
     if not filtered.empty:
         avg_lat = filtered['위도'].mean()
@@ -164,15 +164,15 @@ else:
             m.fit_bounds(bounds, padding=(30, 30))
 
         st_folium(m, use_container_width=True, height=500, returned_objects=[])
-        st.caption("🟢 용품점   🟣 미용점")
+        st.caption("초록 마커는 용품점, 보라 마커는 미용실이에요.")
 
         # 목록 (별표로 즐겨찾기 토글)
         st.divider()
         if auth.is_logged_in():
-            st.write("📋 **가게 목록**  ·  ☆ 별을 눌러 즐겨찾기에 추가하세요")
+            st.write("**가게 목록**  ·  별을 눌러 즐겨찾기에 담아요")
         else:
-            st.write("📋 **가게 목록**")
-            st.caption("로그인하면 ⭐ 즐겨찾기에 추가할 수 있어요.")
+            st.write("**가게 목록**")
+            st.caption("로그인하면 즐겨찾기에 담을 수 있어요.")
         for _, row in filtered.iterrows():
             store_card(row, favs)
     else:

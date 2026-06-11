@@ -7,21 +7,21 @@ import auth
 
 auth.login_widget()
 
-st.title("💬 소통 게시판")
-st.markdown("반려동물을 키우면서 얻은 꿀팁이나 고민을 공유해보세요!")
+st.title("이야기 나누기")
+st.markdown("반려동물을 키우며 쌓인 노하우나 고민을 다른 보호자들과 나눠요.")
 
 # 현재 접속자 정보 표시 (db.py 로직 활용)
 user_id = db.current_user_id()
 if user_id == 1:
-    st.info("💡 현재 **익명(게스트)** 상태입니다. 닉네임으로 활동하려면 왼쪽에서 로그인해주세요.")
+    st.info("지금은 게스트로 보고 있어요. 닉네임으로 활동하려면 왼쪽에서 로그인해 주세요.")
 else:
     nickname = st.session_state.get('nickname', '회원')
-    st.success(f"현재 **{nickname}**님으로 접속 중입니다.")
+    st.success(f"{nickname}님으로 접속 중이에요.")
 
 st.divider()
 
 # ── 새 글 작성 영역 ──
-with st.expander("✍️ 새로운 글 작성하기"):
+with st.expander("새 글 쓰기"):
     with st.form("new_post_form", clear_on_submit=True):
         title = st.text_input("제목", placeholder="제목을 입력하세요")
         content = st.text_area("내용", placeholder="내용을 입력하세요")
@@ -30,7 +30,7 @@ with st.expander("✍️ 새로운 글 작성하기"):
         if submitted:
             if title.strip() and content.strip():
                 db.add_post(title, content)
-                st.toast("게시글이 성공적으로 등록되었습니다!", icon="✅")
+                st.toast("글을 올렸어요.")
                 st.rerun()
             else:
                 st.warning("제목과 내용을 모두 입력해주세요.")
@@ -38,7 +38,7 @@ with st.expander("✍️ 새로운 글 작성하기"):
 st.divider()
 
 # ── 게시글 목록 및 댓글 영역 ──
-st.subheader("📋 전체 게시글")
+st.subheader("전체 글")
 posts = db.get_posts()
 
 if not posts:
@@ -50,12 +50,12 @@ else:
         display_name = "익명(게스트)" if post['auth_kind'] == 'guest' else post['author_name']
 
         # 각 글을 Expander(접기/펼치기) 뷰로 생성
-        with st.expander(f"{post['title']} | 👤 {display_name} | 🕒 {post['created_at'][:16]}"):
+        with st.expander(f"{post['title']}  ·  {display_name}  ·  {post['created_at'][:16]}"):
             st.markdown(post['content'])
 
             # ─ 본인 글이면 삭제 버튼 ─
             if post['user_id'] == my_id:
-                if st.button("🗑️ 글 삭제", key=f"del_post_{post['id']}"):
+                if st.button("글 삭제", key=f"del_post_{post['id']}"):
                     db.delete_post(post['id'])
                     st.toast("게시글을 삭제했어요.")
                     st.rerun()
