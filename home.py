@@ -12,7 +12,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Pet-GPT")
-st.write("입양부터 마지막 인사까지, 반려동물의 평생을 Pet-GPT와 함께 하세요.")
+st.write("입양부터 마지막 인사까지, 반려동물의 평생을 Pet-GPT와 함께 돌봐요.")
+
+# 로그인 안 한 사용자에게는 가볍게 로그인을 권한다 (비로그인 홈이 휑하지 않도록)
+if not auth.is_logged_in():
+    st.caption("왼쪽에서 닉네임으로 로그인하면 우리 아이 정보와 일정을 저장하고 한눈에 볼 수 있어요.")
 
 st.divider()
 
@@ -36,6 +40,7 @@ if auth.is_logged_in():
 
 # ── 서비스 메뉴 (카드를 누르면 해당 페이지로 이동) ──────────────────
 st.markdown("### 무엇을 도와드릴까요")
+st.caption("필요한 서비스를 골라보세요. 카드를 누르면 바로 이동해요.")
 
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -62,17 +67,13 @@ with c5:
         st.caption("장례식장 안내와 함께 추억을 기록할 수 있어요.")
 with c6:
     with st.container(border=True):
-        st.page_link("pages/6_board.py", label="게시판")
+        st.page_link("pages/6_board.py", label="이야기 나누기")
         st.caption("다른 보호자들과 고민이나 정보를 나눠요.")
 
 st.divider()
 
 # ── 내 반려동물 ────────────────────────────────────────────────────
-hc1, hc2 = st.columns([3, 2])
-with hc1:
-    st.markdown("### 우리 아이들")
-with hc2:
-    st.page_link("pages/2_diet.py", label="반려동물 등록·수정하기")
+st.markdown("### 우리 아이들")
 
 pets = get_pets()
 if pets:
@@ -92,8 +93,13 @@ if pets:
                             delete_pet(p["id"])
                             st.toast(f"{p['name']} 정보를 삭제했어요.")
                             st.rerun()
+    st.write("")
+    if st.button("＋ 반려동물 등록·수정하기", key="go_register", use_container_width=True):
+        st.switch_page("pages/2_diet.py")
     st.caption("정보를 바꾸려면 맞춤 식단 페이지에서 같은 이름으로 다시 등록하면 돼요.")
 else:
-    st.info("아직 등록한 반려동물이 없어요. 위의 등록하기를 눌러 첫 아이를 추가해 보세요.")
+    st.info("아직 등록한 반려동물이 없어요. 아래 버튼을 눌러 첫 아이를 추가해 보세요.")
+    if st.button("＋ 반려동물 등록하기", key="go_register", type="primary", use_container_width=True):
+        st.switch_page("pages/2_diet.py")
 
 auth.login_widget()
