@@ -2,12 +2,6 @@ import streamlit as st
 from db import get_pets, delete_pet, get_upcoming_schedules
 import auth
 
-st.set_page_config(
-    page_title="Pet-GPT",
-    page_icon="🐾",
-    layout="wide",
-)
-
 st.markdown("""
 <style>
     .block-container { padding-top: 3rem; max-width: 1100px; }
@@ -17,8 +11,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("우리 아이의 평생을 함께")
-st.write("입양부터 마지막 인사까지, 반려동물과 함께하는 모든 순간을 한곳에서 돌봐요.")
+st.title("Pet-GPT")
+st.write("입양부터 마지막 인사까지, 반려동물의 평생을 Pet-GPT와 함께 돌봐요.")
 
 st.divider()
 
