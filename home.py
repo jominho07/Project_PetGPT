@@ -45,29 +45,29 @@ st.caption("필요한 서비스를 골라보세요. 카드를 누르면 바로 �
 c1, c2, c3 = st.columns(3)
 with c1:
     with st.container(border=True):
-        st.page_link("pages/1_adoption.py", label="가족 찾기")
+        st.page_link("pages/1_adoption.py", label="가족 찾기", icon=":material/pets:")
         st.caption("몇 가지 질문에 답하면 잘 맞는 반려동물을 추천해 드려요.")
 with c2:
     with st.container(border=True):
-        st.page_link("pages/2_diet.py", label="맞춤 식단")
+        st.page_link("pages/2_diet.py", label="맞춤 식단", icon=":material/restaurant:")
         st.caption("나이와 몸무게에 맞는 하루 권장 칼로리를 계산해요.")
 with c3:
     with st.container(border=True):
-        st.page_link("pages/4_health.py", label="건강 수첩")
+        st.page_link("pages/4_health.py", label="건강 수첩", icon=":material/health_and_safety:")
         st.caption("케어 일정과 병원 기록, 복용 중인 약을 관리해요.")
 
 c4, c5, c6 = st.columns(3)
 with c4:
     with st.container(border=True):
-        st.page_link("pages/3_shop.py", label="용품점 찾기")
+        st.page_link("pages/3_shop.py", label="용품점 찾기", icon=":material/storefront:")
         st.caption("가까운 반려동물 용품점과 미용실을 찾아봐요.")
 with c5:
     with st.container(border=True):
-        st.page_link("pages/5_memorial.py", label="마지막 인사")
+        st.page_link("pages/5_memorial.py", label="마지막 인사", icon=":material/local_florist:")
         st.caption("장례식장 안내와 함께 추억을 기록할 수 있어요.")
 with c6:
     with st.container(border=True):
-        st.page_link("pages/6_board.py", label="이야기 나누기")
+        st.page_link("pages/6_board.py", label="이야기 나누기", icon=":material/forum:")
         st.caption("다른 보호자들과 고민이나 정보를 나눠요.")
 
 st.divider()
