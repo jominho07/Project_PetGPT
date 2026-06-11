@@ -20,8 +20,8 @@ from db import (get_favorites, toggle_favorite,
 
 auth.login_widget()
 
-st.title("따뜻한 마지막 인사")
-st.write("지역을 선택하면 가까운 반려동물 장례식장을 지도에서 보여드려요.")
+st.title("마지막 인사")
+st.write("이별을 준비할 수 있도록 장례 시설을 안내하고, 소중한 추억을 앨범으로 간직해 드립니다.")
 
 FAV_KIND = "facility"   # 즐겨찾기 종류 (shop 은 'store')
 

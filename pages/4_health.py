@@ -16,7 +16,7 @@ if "selected_calendar_day" not in st.session_state:
 auth.login_widget()
 
 st.title("건강 수첩")
-st.write("케어 일정부터 병원 기록, 복용 중인 약까지 한곳에서 관리해요.")
+st.write("잊기 쉬운 예방접종부터 병원 진료, 매일 챙겨 먹는 영양제까지. 건강한 일상을 빠짐없이 기록해 보세요.")
 
 pets = get_pets()
 pet_options = {p["name"]: p["id"] for p in pets}

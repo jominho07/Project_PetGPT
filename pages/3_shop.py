@@ -15,8 +15,8 @@ from db import get_favorites, toggle_favorite
 
 auth.login_widget()
 
-st.title("가까운 용품점·미용실 찾기")
-st.write("지역을 선택하면 가까운 반려동물 용품점과 미용실을 지도에서 보여드려요.")
+st.title("용품점 찾기")
+st.write("지역을 선택하면 가까운 반려동물 용품점을 지도에서 보여드려요.")
 
 # 이 페이지에서 다루는 즐겨찾기 종류
 FAV_KIND = "store"

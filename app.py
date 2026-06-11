@@ -14,7 +14,7 @@ diet = st.Page("pages/2_diet.py", title="맞춤 식단")
 shop = st.Page("pages/3_shop.py", title="용품점 찾기")
 health = st.Page("pages/4_health.py", title="건강 수첩")
 memorial = st.Page("pages/5_memorial.py", title="마지막 인사")
-board = st.Page("pages/6_board.py", title="이야기 나누기")
+board = st.Page("pages/6_board.py", title="게시판")
 
 pg = st.navigation([home, adoption, diet, shop, health, memorial, board])
 pg.run()

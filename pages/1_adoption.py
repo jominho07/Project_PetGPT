@@ -13,8 +13,8 @@ from db import get_favorites, toggle_favorite
 
 auth.login_widget()
 
-st.title("나에게 꼭 맞는 가족 찾기")
-st.write("몇 가지 질문에 답하면 잘 맞는 품종을 추천하고, 가까운 입양처를 안내해 드려요.")
+st.title(" 가족 찾기")
+st.write("보호자님의 라이프스타일에 딱 맞는 아이를 추천해 드리고, 주변에서 따뜻한 손길을 기다리는 보호소를 안내해 드려요.")
 
 st.divider()
 

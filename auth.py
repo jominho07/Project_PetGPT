@@ -50,7 +50,7 @@ def login_widget() -> None:
     전 페이지 사이드바에 일관되게 나타난다.
     """
     with st.sidebar:
-        st.markdown("### 👤 사용자")
+        st.markdown("### 👤 마이페이지")
         if is_logged_in():
             st.success(f"**{st.session_state[SESSION_NICKNAME]}** 님으로 로그인됨")
             if st.button("로그아웃", use_container_width=True):
@@ -59,7 +59,7 @@ def login_widget() -> None:
         else:
             st.caption("로그인하면 입력한 데이터가 본인 계정에 저장돼요.")
             nickname = st.text_input("닉네임", key="login_nickname",
-                                     placeholder="예: 멍멍이 보호자")
+                                     placeholder="예: 초코 보호자")
             if st.button("로그인", type="primary", use_container_width=True):
                 if nickname.strip():
                     login(nickname)

@@ -9,8 +9,8 @@ from db import upsert_pet, get_pets, delete_pet
 
 auth.login_widget()
 
-st.title("맞춤 식단 매니저")
-st.write("품종 데이터와 반려동물 상태를 기반으로 하루 권장 칼로리와 맞춤 사료를 추천합니다.")
+st.title("맞춤 식단")
+st.write("품종 데이터와 반려동물 상태를 기반으로 하루 권장 칼로리와 맞춤 사료를 추천해 드려요.")
 
 st.divider()
 

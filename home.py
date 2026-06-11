@@ -12,7 +12,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Pet-GPT")
-st.write("입양부터 마지막 인사까지, 반려동물의 평생을 Pet-GPT와 함께 돌봐요.")
+st.write("입양부터 마지막 인사까지, 반려동물의 평생을 Pet-GPT와 함께 하세요.")
 
 st.divider()
 
@@ -62,7 +62,7 @@ with c5:
         st.caption("장례식장 안내와 함께 추억을 기록할 수 있어요.")
 with c6:
     with st.container(border=True):
-        st.page_link("pages/6_board.py", label="이야기 나누기")
+        st.page_link("pages/6_board.py", label="게시판")
         st.caption("다른 보호자들과 고민이나 정보를 나눠요.")
 
 st.divider()
