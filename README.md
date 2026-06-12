@@ -4,7 +4,7 @@
 
 Pet-GPT는 반려동물을 키우며 마주하는 여러 순간 — 입양, 식단 관리, 건강 기록, 용품 구매, 그리고 마지막 인사 — 을 한곳에서 돕는 플랫폼입니다. 사용자의 위치를 기준으로 주변의 보호소, 용품점, 장례식장 같은 장소를 연결해 주는 데 초점을 맞췄습니다.
 
-🔗 **배포 주소**: [projectpetgpt-gr8h2negdsqe8p4b4d6yca.streamlit.app](https://projectpetgpt-gr8h2negdsqe8p4b4d6yca.streamlit.app)
+🔗 **배포 주소**: [https://projectpetgpt-namcr7wezdjxbbsvdscdas.streamlit.app/)
 
 ---
 
