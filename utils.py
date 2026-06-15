@@ -25,24 +25,31 @@ def load_places(csv_name):
 
 
 def region_selectors(df, key_prefix=""):
-    """시/도 → 시군구 → 동 3단계 드롭다운을 그리고 (sido, sigungu, dong) 반환.
+    """시/도 -> 시군구 -> 동 3단계 드롭다운을 그리고 (시도, 시군구, 동) 반환.
 
-    앞 단계 선택에 따라 뒤 단계 선택지가 좁혀진다.
+    - 시군구와 동에 "전체" 선택지가 있다.
+    - 시군구가 "전체"면 동은 "전체"로 고정되고 비활성화된다.
+    CSV 의 한글 컬럼명(시도/시군구/동)을 사용한다.
     """
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        sido_list = sorted(df["sido"].unique())
+        sido_list = sorted(df["시도"].dropna().unique())
         sido = st.selectbox("시/도", sido_list, key=f"{key_prefix}_sido")
 
     with c2:
-        sigungu_list = sorted(df[df["sido"] == sido]["sigungu"].unique())
+        sigungu_pool = df[df["시도"] == sido]["시군구"].dropna().unique()
+        sigungu_list = ["전체"] + sorted(sigungu_pool)
         sigungu = st.selectbox("시/군/구", sigungu_list, key=f"{key_prefix}_sigungu")
 
     with c3:
-        dong_pool = df[(df["sido"] == sido) & (df["sigungu"] == sigungu)]
-        dong_list = ["전체"] + sorted(dong_pool["dong"].unique())
-        dong = st.selectbox("동/읍/면", dong_list, key=f"{key_prefix}_dong")
+        if sigungu == "전체":
+            dong = st.selectbox("동/읍/면", ["전체"], key=f"{key_prefix}_dong",
+                                disabled=True)
+        else:
+            dong_pool = df[(df["시도"] == sido) & (df["시군구"] == sigungu)]["동"].dropna().unique()
+            dong_list = ["전체"] + sorted(dong_pool)
+            dong = st.selectbox("동/읍/면", dong_list, key=f"{key_prefix}_dong")
 
     return sido, sigungu, dong
 
