@@ -222,24 +222,32 @@ else:
                 adopt_card(row, favs)
             st.divider()
 
-    # 지도
-    avg_lat = filtered["lat"].mean()
-    avg_lon = filtered["lon"].mean()
-    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=12, control_scale=True)
-    for _, row in filtered.iterrows():
-        folium.Marker(
-            [row["lat"], row["lon"]],
-            popup=folium.Popup(build_popup_html(row), max_width=260),
-            tooltip=row["name"],
-            icon=folium.Icon(color="orange", icon="home", prefix="fa"),
-        ).add_to(m)
-    if len(filtered) > 1:
-        bounds = [
-            [filtered["lat"].min(), filtered["lon"].min()],
-            [filtered["lat"].max(), filtered["lon"].max()],
-        ]
-        m.fit_bounds(bounds, padding=(30, 30))
-    st_folium(m, use_container_width=True, height=500, returned_objects=[])
+    # 지도 (좌표가 비어있는 행은 안전하게 제외)
+    map_df = filtered.copy()
+    map_df["lat"] = pd.to_numeric(map_df["lat"], errors="coerce")
+    map_df["lon"] = pd.to_numeric(map_df["lon"], errors="coerce")
+    map_df = map_df.dropna(subset=["lat", "lon"])
+
+    if map_df.empty:
+        st.info("이 지역에는 지도에 표시할 수 있는 위치 정보가 없어요.")
+    else:
+        avg_lat = map_df["lat"].mean()
+        avg_lon = map_df["lon"].mean()
+        m = folium.Map(location=[avg_lat, avg_lon], zoom_start=12, control_scale=True)
+        for _, row in map_df.iterrows():
+            folium.Marker(
+                [row["lat"], row["lon"]],
+                popup=folium.Popup(build_popup_html(row), max_width=260),
+                tooltip=row["name"],
+                icon=folium.Icon(color="orange", icon="home", prefix="fa"),
+            ).add_to(m)
+        if len(map_df) > 1:
+            bounds = [
+                [map_df["lat"].min(), map_df["lon"].min()],
+                [map_df["lat"].max(), map_df["lon"].max()],
+            ]
+            m.fit_bounds(bounds, padding=(30, 30))
+        st_folium(m, use_container_width=True, height=500, returned_objects=[])
 
     # 목록
     if auth.is_logged_in():

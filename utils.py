@@ -25,31 +25,24 @@ def load_places(csv_name):
 
 
 def region_selectors(df, key_prefix=""):
-    """시/도 → 시군구 → 동 3단계 드롭다운을 그리고 (시도, 시군구, 동) 반환.
+    """시/도 → 시군구 → 동 3단계 드롭다운을 그리고 (sido, sigungu, dong) 반환.
 
-    - 시군구와 동에 "전체" 선택지가 있다.
-    - 시군구가 "전체"면 동은 "전체"로 고정되고 비활성화된다.
-    CSV 의 한글 컬럼명(시도/시군구/동)을 사용한다.
+    앞 단계 선택에 따라 뒤 단계 선택지가 좁혀진다.
     """
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        sido_list = sorted(df["시도"].unique())
+        sido_list = sorted(df["sido"].unique())
         sido = st.selectbox("시/도", sido_list, key=f"{key_prefix}_sido")
 
     with c2:
-        sigungu_list = ["전체"] + sorted(df[df["시도"] == sido]["시군구"].unique())
+        sigungu_list = sorted(df[df["sido"] == sido]["sigungu"].unique())
         sigungu = st.selectbox("시/군/구", sigungu_list, key=f"{key_prefix}_sigungu")
 
     with c3:
-        if sigungu == "전체":
-            # 시군구가 전체면 동도 전체로 고정하고 선택을 막는다.
-            dong = st.selectbox("동/읍/면", ["전체"], key=f"{key_prefix}_dong",
-                                disabled=True)
-        else:
-            dong_pool = df[(df["시도"] == sido) & (df["시군구"] == sigungu)]
-            dong_list = ["전체"] + sorted(dong_pool["동"].unique())
-            dong = st.selectbox("동/읍/면", dong_list, key=f"{key_prefix}_dong")
+        dong_pool = df[(df["sido"] == sido) & (df["sigungu"] == sigungu)]
+        dong_list = ["전체"] + sorted(dong_pool["dong"].unique())
+        dong = st.selectbox("동/읍/면", dong_list, key=f"{key_prefix}_dong")
 
     return sido, sigungu, dong
 
@@ -59,11 +52,13 @@ def filter_places(df, sido, sigungu, dong):
 
     "전체" 는 해당 단계의 필터를 적용하지 않는다는 뜻.
     """
-    result = df[df["시도"] == sido]
-    if sigungu != "전체":
+    result = df.copy()
+    if sido and sido != "전체":
+        result = result[result["시도"] == sido]
+    if sigungu and sigungu != "전체":
         result = result[result["시군구"] == sigungu]
-        if dong != "전체":
-            result = result[result["동"] == dong]
+    if dong and dong != "전체":
+        result = result[result["동"] == dong]
     return result.reset_index(drop=True)
 
 
